@@ -23,6 +23,7 @@ export default function SignInScreen() {
   const handleSignIn = async () => {
     const rawPhone = phone.trim();
     const cleanPhoneDigits = rawPhone.replace(/\D/g, '').slice(-10);
+    
 
     if (cleanPhoneDigits.length !== 10) {
       Alert.alert('Invalid Phone', 'Please enter a valid 10-digit mobile number.');
@@ -71,11 +72,13 @@ export default function SignInScreen() {
         return;
       }
 
-      // 4. Preserve sheet attributes without destructive overrides
+
+      const resolvedLang = persistedGlobalLang || matchedUser.language || 'English';
+
       matchedUser = {
         ...matchedUser,
         phone: cleanPhoneDigits,
-        language: matchedUser.language || fallbackLang,
+        language: resolvedLang,
         ngoId: matchedUser.ngoId || 'CENTRAL_POOL'
       };
 
@@ -93,7 +96,7 @@ export default function SignInScreen() {
 
       // 6. Persist session
       await AsyncStorage.setItem('loggedInUser', JSON.stringify(matchedUser));
-      await AsyncStorage.setItem('appLanguagePreference', matchedUser.language);
+      await AsyncStorage.setItem('appLanguagePreference', resolvedLang);
 
       router.replace('/(tabs)');
 

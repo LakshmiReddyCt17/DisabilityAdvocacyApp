@@ -392,27 +392,35 @@ export default function ProfileScreen() {
   
 
   // Runs once on launch: Restores logged-in user profile from local storage
-  useEffect(() => {
-    async function loadUser() {
-      const raw = await AsyncStorage.getItem('loggedInUser');
-      if (raw) {
-        const user = JSON.parse(raw);
-        setName(user.name || 'User');
-        setPhone(user.phone || '');
-        setEmail(user.email || '');
-        setDisabilityType(user.disabilityType || '');
-        setUid(user.uid || '');
-        setNgoId(user.ngoId || 'CENTRAL_POOL');
-        setEditName(user.name || '');
-        seteditdisabilityType(user.disabilityType||'');
-        setEditEmail(user.email || '');
-        setEditUid(user.uid || '');
-        setLanguage(user.language || 'English');
-        if (user.language) setAppLang(user.language as AppLanguage);
+useEffect(() => {
+  async function loadUser() {
+    const savedLang = await AsyncStorage.getItem('appLanguagePreference');
+    if (savedLang) {
+      setLanguage(savedLang);
+      setAppLang(savedLang as AppLanguage);
+    }
+
+    const raw = await AsyncStorage.getItem('loggedInUser');
+    if (raw) {
+      const user = JSON.parse(raw);
+      setName(user.name || 'User');
+      setPhone(user.phone || '');
+      setEmail(user.email || '');
+      setDisabilityType(user.disabilityType || '');
+      setUid(user.uid || '');
+      setNgoId(user.ngoId || 'CENTRAL_POOL');
+      setEditName(user.name || '');
+      seteditdisabilityType(user.disabilityType || '');
+      setEditEmail(user.email || '');
+      setEditUid(user.uid || '');
+      if (!savedLang && user.language) {
+        setLanguage(user.language);
+        setAppLang(user.language as AppLanguage);
       }
     }
-    loadUser();
-  }, []);
+  }
+  loadUser();
+}, []);
 
   // Form Submit: Saves modified name/email variables 
   const handleSaveProfile = async () => {
