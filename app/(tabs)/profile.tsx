@@ -1,15 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Linking,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
+
   Text,
   TextInput,
   TouchableOpacity,
@@ -18,6 +20,95 @@ import {
 import { useAccessibility } from '../../context/AccessibilityContext';
 import { appDictionary, AppLanguage } from '../../lib/appTranslations';
 
+type DropdownOption = string | { label: string; value: string };
+
+type DropdownFieldProps = {
+  label: string;
+  value: string;
+  options: DropdownOption[];
+  onSelect: (value: string) => void;
+  placeholder: string;
+  getFontSize?: (base: number) => number;
+};
+
+function DropdownField({ label, value, options, onSelect, placeholder, getFontSize = (s) => s }: DropdownFieldProps) {
+  const [open, setOpen] = useState(false);
+
+  const selectedOption = options.find((opt) => 
+    typeof opt === 'string' ? opt === value : opt.value === value
+  );
+
+  const displayValue = selectedOption 
+    ? (typeof selectedOption === 'string' ? selectedOption : selectedOption.label)
+    : placeholder;
+
+  return (
+    <View style={styles.fieldGroup}>
+      {label ? (
+        <Text style={[styles.label, { fontSize: getFontSize(16) }]} aria-hidden={true}>
+          {label}
+        </Text>
+      ) : null}
+      
+      <Pressable
+        style={[styles.inputLike, open && styles.inputFocused]}
+        onPress={() => setOpen(true)}
+        accessibilityRole="combobox"
+        accessibilityLabel={label ? `${label}, selected option: ${displayValue}` : displayValue}
+        accessibilityHint="Double tap to open selection menu"
+        accessibilityState={{ expanded: open }}
+      >
+        <Text style={[styles.inputText, { fontSize: getFontSize(16) }, !value && styles.placeholder]}>
+          {displayValue}
+        </Text>
+        <Ionicons name="chevron-down-outline" size={20} color="#334155" style={styles.rightIcon} />
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable 
+          style={styles.modalBackdrop} 
+          onPress={() => setOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Close selection menu"
+        >
+          <View style={styles.modalCard} accessibilityViewIsModal={true}>
+            {label ? (
+              <Text style={[styles.modalTitle, { fontSize: getFontSize(18) }]} accessibilityRole="header">
+                {label}
+              </Text>
+            ) : null}
+            <ScrollView>
+              {options.map((option) => {
+                const optValue = typeof option === 'string' ? option : option.value;
+                const optLabel = typeof option === 'string' ? option : option.label;
+                const isSelected = value === optValue;
+
+                return (
+                  <Pressable
+                    key={optValue}
+                    style={[styles.optionButton, isSelected && styles.optionButtonActive]}
+                    onPress={() => {
+                      onSelect(optValue);
+                      setOpen(false);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={optLabel}
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <Text style={[styles.optionText, { fontSize: getFontSize(16) }, isSelected && styles.optionTextActive]}>
+                      {optLabel}
+                    </Text>
+                    {isSelected && <Ionicons name="checkmark-circle" size={20} color="#1d4ed8" />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
 // List of supported languages for the selection modal
 const LANGUAGES = [
   { code: 'English', label: 'English' },
@@ -29,6 +120,76 @@ const LANGUAGES = [
   { code: 'Kannada', label: 'ಕನ್ನಡ' }
 ];
 
+const RAW_DISABILITY_TYPES = [
+  'Locomotor Disability',
+  'Visual Impairment',
+  'Hearing Impairment',
+  'Intellectual Disability',
+  'Autism Spectrum Disorder',
+  'Multiple Disabilities'
+];
+
+const COMPLETE_DISABILITY_TRANSLATIONS: Record<AppLanguage, Record<string, string>> = {
+  English: {
+    'Locomotor Disability': 'Locomotor Disability',
+    'Visual Impairment': 'Visual Impairment',
+    'Hearing Impairment': 'Hearing Impairment',
+    'Intellectual Disability': 'Intellectual Disability',
+    'Autism Spectrum Disorder': 'Autism Spectrum Disorder',
+    'Multiple Disabilities': 'Multiple Disabilities',
+  },
+  Kannada: {
+    'Locomotor Disability': 'ಚಲನವಲನ ವಿಕಲಾಂಗತೆ (Locomotor Disability)',
+    'Visual Impairment': 'ದೃಷ್ಟಿ ದೋಷ (Visual Impairment)',
+    'Hearing Impairment': 'ಶ್ರವಣ ದೋಷ (Hearing Impairment)',
+    'Intellectual Disability': 'ಬೌದ್ಧಿಕ ವಿಕಲಾಂಗತೆ (Intellectual Disability)',
+    'Autism Spectrum Disorder': 'ಆಟಿಸಂ ಸ್ಪೆಕ್ಟ್ರಮ್ ಡಿಸಾರ್ಡರ್ (Autism Spectrum)',
+    'Multiple Disabilities': 'ಬಹು ವಿಕಲಾಂಗತೆಗಳು (Multiple Disabilities)',
+  },
+  Hindi: {
+    'Locomotor Disability': 'लोकोमोटर दिव्यांगता (Locomotor Disability)',
+    'Visual Impairment': 'दृष्टिबाधित (Visual Impairment)',
+    'Hearing Impairment': 'श्रवण बाधित (Hearing Impairment)',
+    'Intellectual Disability': 'बौद्धिक दिव्यांगता (Intellectual Disability)',
+    'Autism Spectrum Disorder': 'ऑटिज्म स्पेक्ट्रम डिसऑर्डर (Autism Spectrum)',
+    'Multiple Disabilities': 'बहु-दिव्यांगता (Multiple Disabilities)',
+  },
+  Tamil: {
+    'Locomotor Disability': 'இயக்கக் குறைபாடு (Locomotor Disability)',
+    'Visual Impairment': 'பார்வைக் குறைபாடு (Visual Impairment)',
+    'Hearing Impairment': 'கேள்விக் குறைபாடு (Hearing Impairment)',
+    'Intellectual Disability': 'அறிவுசார் குறைபாடு (Intellectual Disability)',
+    'Autism Spectrum Disorder': 'ஆட்டிசம் குறைபாடு (Autism Spectrum)',
+    'Multiple Disabilities': 'பல்வேறு குறைபாடுகள் (Multiple Disabilities)',
+  },
+  Telugu: {
+    'Locomotor Disability': 'చలన వైకల్యం (Locomotor Disability)',
+    'Visual Impairment': 'దృష్టి లోపం (Visual Impairment)',
+    'Hearing Impairment': 'వినికిడి లోపం (Hearing Impairment)',
+    'Intellectual Disability': 'మేధో వైకల్యం (Intellectual Disability)',
+    'Autism Spectrum Disorder': 'ఆటిజం స్పెక్ట్రమ్ డిజార్డర్ (Autism Spectrum)',
+    'Multiple Disabilities': 'బహుళ వైకల్యాలు (Multiple Disabilities)',
+  },
+  Bengali: {
+    'Locomotor Disability': 'লোকোমোটর প্রতিবন্ধকতা (Locomotor Disability)',
+    'Visual Impairment': 'দৃষ্টি প্রতিবন্ধকতা (Visual Impairment)',
+    'Hearing Impairment': 'শ্রবণ প্রতিবন্ধকতা (Hearing Impairment)',
+    'Intellectual Disability': 'বুদ্ধিবৃত্তিক প্রতিবন্ধকতা (Intellectual Disability)',
+    'Autism Spectrum Disorder': 'অটিজম স্পেকট্রাম ডিসঅর্ডার (Autism Spectrum)',
+    'Multiple Disabilities': 'একাধিক প্রতিবন্ধকতা (Multiple Disabilities)',
+  },
+  Marathi: {
+    'Locomotor Disability': 'अस्थिव्यंग दिव्यांगत्व (Locomotor Disability)',
+    'Visual Impairment': 'दृष्टिदोष (Visual Impairment)',
+    'Hearing Impairment': 'कर्णबधिरता (Hearing Impairment)',
+    'Intellectual Disability': 'बौद्धिक दिव्यांगत्व (Intellectual Disability)',
+    'Autism Spectrum Disorder': 'ऑटिझम स्पेक्ट्रम डिसऑर्डर (Autism Spectrum)',
+    'Multiple Disabilities': 'बहुविकलांगत्व (Multiple Disabilities)',
+  },
+};
+
+
+
 // Screen-specific language dictionaries for titles, labels, and popups
 const profileTranslations = {
   English: {
@@ -38,7 +199,7 @@ const profileTranslations = {
     largeFont: "Large Typography Text Mode",
     contactHelpline: "Contact NGO Toll-Free Helpline",
     raiseGrievance: "Log an Official Support Request",
-    idKey: "ID reference Key",
+    idKey: "UID/UDID",
     mobile: "Mobile Contact",
     emailStr: "Email Address",
     langStr: "Language Layer",
@@ -61,7 +222,7 @@ const profileTranslations = {
     largeFont: "बड़ी टाइपोग्राफी टेक्स्ट मोड",
     contactHelpline: "एनजीओ टोल-फ्री हेल्पलाइन से संपर्क करें",
     raiseGrievance: "आधिकारिक सहायता अनुरोध दर्ज करें",
-    idKey: "आईडी संदर्भ कुंजी",
+    idKey: "आईडी (UID/UDID)",
     mobile: "मोबाइल संपर्क",
     emailStr: "ईमेल पता",
     langStr: "भाषा परत",
@@ -84,7 +245,7 @@ const profileTranslations = {
     largeFont: "ದೊಡ್ಡ ಅಕ್ಷರಗಳ ಪಠ್ಯ ಮೋಡ್",
     contactHelpline: "ಸಹಾಯವಾಣಿಯನ್ನು ಸಂಪರ್ಕಿಸಿ",
     raiseGrievance: "ಅಧಿಕೃತ ಬೆಂಬಲ ವಿನಂತಿಯನ್ನು ಸಲ್ಲಿಸಿ",
-    idKey: "ಐಡಿ ಉಲ್ಲೇಖ ಸಂಖ್ಯೆ",
+    idKey: "ಐಡಿ ಉಲ್ಲೇಖ ಸಂಖ್ಯೆ(UID/UDID)",
     mobile: "ಮೊಬೈಲ್ ಸಂಖ್ಯೆ",
     emailStr: "ಇಮೇಲ್ ವಿಳಾಸ",
     langStr: "ಭಾಷೆ",
@@ -107,7 +268,7 @@ const profileTranslations = {
     largeFont: "పెద్ద టైపోగ్రఫీ టెక్స్ట్ మోడ్",
     contactHelpline: "NGO ఉచిత హెల్ప్‌లైన్‌ను సంప్రదించండి",
     raiseGrievance: "అధికారిక మద్దతు అభ్యర్థనను నమోదు చేయండి",
-    idKey: "ఐడి సూచన కీ",
+    idKey: "ఐడి సూచన కీ(UID/UDID)",
     mobile: "మొబైల్ సంప్రదింపు",
     emailStr: "ఇమెయిల్ చిరునామా",
     langStr: "భాషా శ్రేణి",
@@ -129,7 +290,7 @@ const profileTranslations = {
     largeFont: "பெரிய எழுத்து உரை முறைமை",
     contactHelpline: "உதவி எண்களை அழைக்கவும்",
     raiseGrievance: "ஆதரவு கோரிக்கையைப் பதிவு செய்யவும்",
-    idKey: "அடையாளக் குறிப்பு எண்",
+    idKey: "அடையாளக் குறிப்பு எண்(UID/UDID)",
     mobile: "கைபேசி எண்",
     emailStr: "மின்னஞ்சல் முகவரி",
     langStr: "மொழி",
@@ -152,7 +313,7 @@ const profileTranslations = {
     largeFont: "বড় টাইপোগ্রাফি টেক্সট মোড",
     contactHelpline: "এনজিও টোল-ফ্রি হেল্পলাইনে যোগাযোগ করুন",
     raiseGrievance: "একটি অফিশিয়াল সমর্থন অনুরোধ নথিভুক্ত করুন",
-    idKey: "আইডি রেফারেন্স কী",
+    idKey: "আইডি রেফারেন্স কী(UID/UDID)",
     mobile: "মোবাইল যোগাযোগ",
     emailStr: "ইমেল ঠিকানা",
     langStr: "ভাষা স্তর",
@@ -175,7 +336,7 @@ const profileTranslations = {
     largeFont: "मोठा टायपोग्राफी टेक्स्ट मोड", 
     contactHelpline: "एनजीओ टोल-फ्री हेल्पलाइनशी संपर्क साधा",
     raiseGrievance: "अधिकृत समर्थन विनंती नोंदवा",
-    idKey: "आयडी संदर्भ की",
+    idKey: "आयडी संदर्भ की(UID/UDID)",
     mobile: "मोबाईल संपर्क",
     emailStr: "ईमेल पत्ता",
     langStr: "भाषा स्तर",
@@ -216,6 +377,19 @@ export default function ProfileScreen() {
   // Form input field temporary buffers
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editdisabilityType, seteditdisabilityType] = useState('');
+  const [EditUid, setEditUid] = useState('');
+
+
+
+      const disabilityTypeOptions = useMemo(() => {
+        const optiosMap = COMPLETE_DISABILITY_TRANSLATIONS[appLang] || COMPLETE_DISABILITY_TRANSLATIONS.English;
+        return RAW_DISABILITY_TYPES.map((st) => ({
+          value: st, // Stored cleanly in English for backend/sheets
+          label: optiosMap[st] || st // Displayed dynamically in regional script + English
+        }));
+      }, [appLang]);
+  
 
   // Runs once on launch: Restores logged-in user profile from local storage
   useEffect(() => {
@@ -230,7 +404,9 @@ export default function ProfileScreen() {
         setUid(user.uid || '');
         setNgoId(user.ngoId || 'CENTRAL_POOL');
         setEditName(user.name || '');
+        seteditdisabilityType(user.disabilityType||'');
         setEditEmail(user.email || '');
+        setEditUid(user.uid || '');
         setLanguage(user.language || 'English');
         if (user.language) setAppLang(user.language as AppLanguage);
       }
@@ -238,18 +414,51 @@ export default function ProfileScreen() {
     loadUser();
   }, []);
 
-  // Form Submit: Saves modified name/email variables to phone memory cache
+  // Form Submit: Saves modified name/email variables 
   const handleSaveProfile = async () => {
-    const raw = await AsyncStorage.getItem('loggedInUser');
-    if (raw) {
+    try {
+      const raw = await AsyncStorage.getItem('loggedInUser');
+      if (!raw) return;
+
       const user = JSON.parse(raw);
-      const updated = { ...user, name: editName, email: editEmail };
+      const chosenDisability = editdisabilityType || disabilityType;
+      const chosenName = editName.trim() || name;
+      const chosenEmail = editEmail.trim();
+      const chosenUid=EditUid.trim();
+
+      // 1. Sync to Google Sheets backend
+      const { updateUserProfile } = require('../../lib/googleSheets');
+      await updateUserProfile({
+        phone: user.phone,
+        name: chosenName,
+        email: chosenEmail,
+        disabilityType: chosenDisability,
+        uid:chosenUid
+      });
+
+
+      
+      // 2. Sync to local AsyncStorage
+      const updated = {
+        ...user,
+        name: chosenName,
+        email: chosenEmail,
+        disabilityType: chosenDisability,
+      };
+
       await AsyncStorage.setItem('loggedInUser', JSON.stringify(updated));
-      setName(editName);
-      setEmail(editEmail);
+
+      // 3. Update active UI states
+      setName(chosenName);
+      setEmail(chosenEmail);
+      setDisabilityType(chosenDisability);
+
+      setEditModalVisible(false);
+      Alert.alert('Saved', 'Your profile configuration details have been updated.');
+    } catch (error) {
+      console.error('Failed to sync profile update:', error);
+      Alert.alert('Update Error', 'Could not sync changes to the cloud. Please check your internet connection.');
     }
-    setEditModalVisible(false);
-    Alert.alert('Saved', 'Your profile configuration details have been updated.');
   };
 
   // Language Picker: Commits new language choices across both global preferences and user accounts
@@ -515,6 +724,30 @@ export default function ProfileScreen() {
               autoCapitalize="none" 
               accessibilityLabel={tProfile.modalEmailLabel}
             />
+
+<Text style={styles.modalLabel} aria-hidden={true}>{tProfile.idKey}</Text>
+            <TextInput 
+              style={styles.modalInput} 
+              value={EditUid} 
+              onChangeText={setEditUid} 
+              placeholder="UID/UDID" 
+              placeholderTextColor="#94a3b8" 
+              autoCapitalize="none" 
+              accessibilityLabel={tProfile.idKey}
+            />
+
+<DropdownField
+  label="Disability Type"
+  value={editdisabilityType}
+  onSelect={(val) => {
+    seteditdisabilityType(val);
+  }}
+  placeholder="Select disability type"
+  options={disabilityTypeOptions}
+  getFontSize={getFontSize}
+/>
+
+
             
             <TouchableOpacity style={styles.modalSaveButton} onPress={handleSaveProfile} accessibilityRole="button" accessibilityLabel={tProfile.modalSaveBtn}>
               <Text style={styles.modalSaveText}>{tProfile.modalSaveBtn}</Text>
@@ -525,6 +758,7 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
 
       {/* ── Popup Layout 2: Language Selector Radio List ── */}
       <Modal visible={languageModalVisible} transparent animationType="slide" onRequestClose={() => setLanguageModalVisible(false)}>
@@ -640,4 +874,41 @@ const styles = StyleSheet.create({
       android: 'sans-serif', //clean default system font sheet that separates regional blocks safely
     }),
   },
+
+
+  fieldGroup: { marginBottom: 18 },
+  label: { fontSize: 16, fontWeight: '700', color: '#334155', marginBottom: 8 },
+  optionalTag: { fontSize: 13, fontWeight: '400', color: '#64748b' },
+  
+  inputLike: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1.5, 
+    borderColor: '#cbd5e1', 
+    borderRadius: 12, 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    backgroundColor: '#f8fafc', 
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1
+  },
+
+  inputFocused: {
+    borderColor: '#2563eb', 
+    backgroundColor: '#ffffff',
+    shadowColor: '#2563eb',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  inputText: { fontSize: 16, color: '#0f172a', flex: 1 },
+  placeholder: { color: '#94a3b8' },
+  rightIcon: { marginLeft: 8 },
+
+
+
+
 });

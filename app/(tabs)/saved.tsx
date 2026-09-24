@@ -18,7 +18,143 @@ import { useAccessibility } from '../../context/AccessibilityContext';
 import { appDictionary, AppLanguage } from '../../lib/appTranslations';
 import { getSchemes } from '../../lib/googleSheets';
 
-// Define the shape of a Scheme object for type-safety across the file
+// ── COMPREHENSIVE INLINE SAVED ACCESSIBILITY DICTIONARY ──
+const A11Y_SAVED_TRANSLATIONS: Record<AppLanguage, Record<string, string>> = {
+  English: {
+    searchHint: "Type here to filter saved schemes by name.",
+    clearSearchLabel: "Clear search text",
+    govtTag: "Government Welfare Scheme",
+    csrTag: "CSR Welfare Program",
+    applyButtonHint: "Navigates away to launch the official form inside your browser.",
+    cardHint: "Double tap to review comprehensive eligibility details for this bookmarked item.",
+    recommendedBy: "NGO Recommended Option by",
+    savedSchemePrefix: "Saved Scheme",
+    categoryPrefix: "Category",
+    issuedByPrefix: "Issued by",
+    removeButtonHint: "Double tap to delete this scheme from your saved bookmarks.",
+    removePrefix: "Remove",
+    removeSuffix: "from your saved bookmarks.",
+    linkErrorTitle: "Link Error",
+    linkErrorMsg: "Cannot launch browser routing for this website target path.",
+    networkIssueTitle: "Network Issue",
+    networkIssueMsg: "Failed to route out to the target server configuration.",
+  },
+  Hindi: {
+    searchHint: "सहेजी गई योजनाओं को नाम से खोजने के लिए यहाँ टाइप करें।",
+    clearSearchLabel: "खोज टेक्स्ट साफ़ करें",
+    govtTag: "सरकारी कल्याण योजना",
+    csrTag: "सीएसआर कल्याण कार्यक्रम",
+    applyButtonHint: "अपने ब्राउज़र में आधिकारिक पोर्टल खोलने के लिए दो बार टैप करें।",
+    cardHint: "इस बुकमार्क की गई योजना के संपूर्ण विवरण देखने के लिए दो बार टैप करें।",
+    recommendedBy: "एनजीओ द्वारा अनुशंसित योजना, अनुशंसक:",
+    savedSchemePrefix: "सहेजी गई योजना",
+    categoryPrefix: "श्रेणी",
+    issuedByPrefix: "जारीकर्ता",
+    removeButtonHint: "इस योजना को अपने सहेजे गए बुकमार्क से हटाने के लिए दो बार टैप करें।",
+    removePrefix: "हटाएं",
+    removeSuffix: "सहेजे गए बुकमार्क से।",
+    linkErrorTitle: "लिंक त्रुटि",
+    linkErrorMsg: "इस वेबसाइट लिंक के लिए ब्राउज़र नहीं खोला जा सका।",
+    networkIssueTitle: "नेटवर्क समस्या",
+    networkIssueMsg: "लक्ष्य सर्वर से जुड़ने में असमर्थ।",
+  },
+  Kannada: {
+    searchHint: "ಉಳಿಸಲಾದ ಯೋಜನೆಗಳನ್ನು ಹೆಸರಿನ ಮೂಲಕ ಹುಡುಕಲು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ.",
+    clearSearchLabel: "ಹುಡುಕಾಟ ಪಠ್ಯವನ್ನು ತೆರವುಗೊಳಿಸಿ",
+    govtTag: "ಸರ್ಕಾರಿ ಕಲ್ಯಾಣ ಯೋಜನೆ",
+    csrTag: "ಸಿಎಸ್ಆರ್ ಕಲ್ಯಾಣ ಕಾರ್ಯಕ್ರಮ",
+    applyButtonHint: "ನಿಮ್ಮ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಅಧಿಕೃತ ಪೋರ್ಟಲ್ ತೆರೆಯಲು ಎರಡು ಬಾರಿ ಟ್ಯಾಪ್ ಮಾಡಿ.",
+    cardHint: "ಈ ಉಳಿಸಲಾದ ಯೋಜನೆಯ ಸಂಪೂರ್ಣ ವಿವರಗಳನ್ನು ಪರಿಶೀಲಿಸಲು ಎರಡು ಬಾರಿ ಟ್ಯಾಪ್ ಮಾಡಿ.",
+    recommendedBy: "ಎನ್‌ಜಿಒ ಶಿಫಾರಸು ಮಾಡಿದ ಯೋಜನೆ, ಶಿಫಾರಸುದಾರರು:",
+    savedSchemePrefix: "ಉಳಿಸಲಾದ ಯೋಜನೆ",
+    categoryPrefix: "ವರ್ಗ",
+    issuedByPrefix: "ನೀಡಿದವರು",
+    removeButtonHint: "ಈ ಯೋಜನೆಯನ್ನು ನಿಮ್ಮ ಉಳಿಸಿದ ಬುಕ್‌ಮಾರ್ಕ್‌ಗಳಿಂದ ತೆಗೆದುಹಾಕಲು ಎರಡು ಬಾರಿ ಟ್ಯಾಪ್ ಮಾಡಿ.",
+    removePrefix: "ತೆಗೆದುಹಾಕಿ",
+    removeSuffix: "ಉಳಿಸಿದ ಬುಕ್‌ಮಾರ್ಕ್‌ಗಳಿಂದ.",
+    linkErrorTitle: "ಲಿಂಕ್ ದೋಷ",
+    linkErrorMsg: "ಈ ವೆಬ್‌ಸೈಟ್‌ಗಾಗಿ ಬ್ರೌಸರ್ ತೆರೆಯಲು ಸಾಧ್ಯವಿಲ್ಲ.",
+    networkIssueTitle: "ನೆಟ್‌ವರ್ಕ್ ಸಮಸ್ಯೆ",
+    networkIssueMsg: "ಸರ್ವರ್ ಕಾನ್ಫಿಗರೇಶನ್‌ಗೆ ಸಂಪರ್ಕಿಸಲು ವಿಫಲವಾಗಿದೆ.",
+  },
+  Tamil: {
+    searchHint: "சேமிக்கப்பட்ட திட்டங்களை பெயர் மூலம் வடிகட்ட இங்கே தட்டச்சு செய்யவும்.",
+    clearSearchLabel: "தேடல் உரையை அழிக்கவும்",
+    govtTag: "அரசு நலத்திட்டம்",
+    csrTag: "கார்ப்பரேட் சமூக நலத் திட்டம்",
+    applyButtonHint: "உலாவியில் அதிகாரப்பூர்வ இணையதளத்தைத் திறக்க இருமுறை தட்டவும்.",
+    cardHint: "இந்தச் சேமிக்கப்பட்ட திட்டத்தின் விரிவான தகுதி விவரங்களைக் காண இருமுறை தட்டவும்.",
+    recommendedBy: "தன்னார்வ அமைப்பால் பரிந்துரைக்கப்பட்ட திட்டம், பரிந்துரைத்தவர்:",
+    savedSchemePrefix: "சேமிக்கப்பட்ட திட்டம்",
+    categoryPrefix: "வகை",
+    issuedByPrefix: "வழங்குபவர்",
+    removeButtonHint: "இந்தத் திட்டத்தை சேமிப்பிலிருந்து நீக்க இருமுறை தட்டவும்.",
+    removePrefix: "நீக்குக",
+    removeSuffix: "சேமிக்கப்பட்ட திட்டங்களிலிருந்து.",
+    linkErrorTitle: "இணைப்புப் பிழை",
+    linkErrorMsg: "இந்த வலைத்தள இணைப்பிற்கான உலாவியைத் திறக்க முடியவில்லை.",
+    networkIssueTitle: "வலைப்பின்னல் சிக்கல்",
+    networkIssueMsg: "இலக்கு சேவையகத்தை இணைக்க முடியவில்லை.",
+  },
+  Telugu: {
+    searchHint: "సేవ్ చేసిన పథకాలను పేరు ద్వారా ఫిల్టర్ చేయడానికి ఇక్కడ టైప్ చేయండి.",
+    clearSearchLabel: "శోధన వచనాన్ని క్లియర్ చేయండి",
+    govtTag: "ప్రభుత్వ సంక్షేమ పథకం",
+    csrTag: "సిఎస్‌ఆర్ సంక్షేమ కార్యక్రమం",
+    applyButtonHint: "మీ బ్రౌజర్‌లో అధికారిక పోర్టల్‌ను ప్రారంభించడానికి రెండుసార్లు నొక్కండి.",
+    cardHint: "ఈ బుక్‌మార్క్ చేసిన అంశం యొక్క సమగ్ర అర్హత వివరాలను సమీక్షించడానికి రెండుసార్లు నొక్కండి.",
+    recommendedBy: "ఎన్‌జీవో సిఫార్సు చేసిన పథకం, సిఫార్సు చేసినవారు:",
+    savedSchemePrefix: "సేవ్ చేసిన పథకం",
+    categoryPrefix: "వర్గం",
+    issuedByPrefix: "జారీ చేసిన సంస్థ",
+    removeButtonHint: "ఈ పథకాన్ని సేవ్ చేసిన బుక్‌మార్క్‌ల నుండి తొలగించడానికి రెండుసార్లు నొక్కండి.",
+    removePrefix: "తొలగించు",
+    removeSuffix: "సేవ్ చేసిన బుక్‌మార్క్‌ల నుండి.",
+    linkErrorTitle: "లింక్ లోపం",
+    linkErrorMsg: "ఈ వెబ్‌సైట్ కోసం బ్రౌజర్‌ను ప్రారంభించడం సాధ్యం కాలేదు.",
+    networkIssueTitle: "నెట్‌వర్క్ సమస్య",
+    networkIssueMsg: "టార్గెట్ సర్వర్ కాన్ఫిగరేషన్‌కు రూట్ చేయడంలో విఫలమైంది.",
+  },
+  Bengali: {
+    searchHint: "নাম অনুসারে সংরক্ষিত স্কিমগুলি ফিল্টার করতে এখানে লিখুন।",
+    clearSearchLabel: "অনুসন্ধান লেখা মুছুন",
+    govtTag: "সরকারি কল্যাণমূলক স্কিম",
+    csrTag: "সিএসআর কল্যাণ কর্মসূচি",
+    applyButtonHint: "আপনার ব্রাউজারে অফিসিয়াল ফর্মটি খুলতে দুবার ট্যাপ করুন।",
+    cardHint: "এই সংরক্ষিত স্কিমের সম্পূর্ণ বিবরণ পর্যালোচনা করতে দুবার ট্যাপ করুন।",
+    recommendedBy: "এনজিও সুপারিশকৃত স্কিম, সুপারিশকারী:",
+    savedSchemePrefix: "সংরক্ষিত স্কিম",
+    categoryPrefix: "বিভাগ",
+    issuedByPrefix: "প্রদানকারী সংস্থা",
+    removeButtonHint: "সংরক্ষিত তালিকা থেকে এই স্কিমটি সরিয়ে ফেলতে দুবার ট্যাপ করুন।",
+    removePrefix: "সরান",
+    removeSuffix: "আপনার সংরক্ষিত বুকমার্ক থেকে।",
+    linkErrorTitle: "লিংক ত্রুটি",
+    linkErrorMsg: "এই ওয়েবসাইট লিংকের জন্য ব্রাউজার চালু করা যাচ্ছে না।",
+    networkIssueTitle: "নেটওয়ার্ক সমস্যা",
+    networkIssueMsg: "সার্ভারের সাথে সংযোগ করতে ব্যর্থ হয়েছে।",
+  },
+  Marathi: {
+    searchHint: "जतन केलेल्या योजना नावाद्वारे शोधण्यासाठी येथे टाइप करा.",
+    clearSearchLabel: "शोध मजकूर साफ करा",
+    govtTag: "शासकीय कल्याणकारी योजना",
+    csrTag: "सीएसआर कल्याणकारी कार्यक्रम",
+    applyButtonHint: "अधिकृत वेबसाइट ब्राउझरमध्ये उघडण्यासाठी दोनदा टॅप करा.",
+    cardHint: "या जतन केलेल्या योजनेची सर्व माहिती पाहण्यासाठी दोनदा टॅप करा.",
+    recommendedBy: "एनजीओने शिफारस केलेली योजना, शिफारसकर्ता:",
+    savedSchemePrefix: "जतन केलेली योजना",
+    categoryPrefix: "वर्गवारी",
+    issuedByPrefix: "जारी करणारी संस्था",
+    removeButtonHint: "या योजनेला तुमच्या जतन केलेल्या यादीतून काढून टाकण्यासाठी दोनदा टॅप करा.",
+    removePrefix: "काढा",
+    removeSuffix: "तुमच्या जतन केलेल्या यादीतून.",
+    linkErrorTitle: "लिंक त्रुटी",
+    linkErrorMsg: "या वेबसाइटसाठी ब्राउझर उघडता येत नाही.",
+    networkIssueTitle: "नेटवर्क समस्या",
+    networkIssueMsg: "सर्व्हरशी संपर्क साधण्यात अयशस्वी.",
+  }
+};
+
 type Scheme = {
   id: string;
   schemeName: string;
@@ -32,26 +168,21 @@ type Scheme = {
 };
 
 export default function SavedScreen() {
-  const router = useRouter(); // Core component for handling view transitions and screen routing
-  const [savedSchemes, setSavedSchemes] = useState<Scheme[]>([]); // Tracks array of schemes saved locally
-  const [appLang, setAppLang] = useState<AppLanguage>('English'); // Holds user's active interface language choice
+  const router = useRouter();
+  const [savedSchemes, setSavedSchemes] = useState<Scheme[]>([]);
+  const [appLang, setAppLang] = useState<AppLanguage>('English');
 
-  // Added States for client-side local recommendation checks
   const [userPhoneState, setUserPhoneState] = useState('');
   const [rawSuggestions, setRawSuggestions] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [disabilityType, setDisabilityType] = useState('');
 
+  const { getFontSize } = useAccessibility();
 
-
-  const { getFontSize } = useAccessibility(); // Accessibility hook to dynamically scale text sizing layout parameters
-
-  // Fires automatically every single time a user switches tabs or navigates back to this screen
   useFocusEffect(
     useCallback(() => {
       async function loadAndTranslateSaved() {
         try {
-          // Fetch raw strings out of local hardware memory storage sandbox
           const rawSaved = await AsyncStorage.getItem('savedSchemes');
           const rawUser = await AsyncStorage.getItem('loggedInUser');
           
@@ -63,20 +194,18 @@ export default function SavedScreen() {
             setDisabilityType(user.disabilityType || '');
             if (user.language) {
               activeLang = user.language as AppLanguage;
-              setAppLang(activeLang); // Sync state variables with active profile language configuration
+              setAppLang(activeLang);
             }
             currentUserPhone = user.phone || '';
             setUserPhoneState(currentUserPhone.split('.')[0].replace(/\D/g, '').trim());
           }
       
-          // Early exit check if the user has absolutely no bookmarked items yet
           if (!rawSaved) {
             setSavedSchemes([]);
             return;
           }
       
           const localFavorites = JSON.parse(rawSaved) as Scheme[];
-          // Request fresh database master package envelope formats from backend engine
           const responseData = await getSchemes(activeLang, currentUserPhone);
       
           let freshSheetData = [];
@@ -94,23 +223,19 @@ export default function SavedScreen() {
           setRawSuggestions(inboundSuggestions);
 
           if (freshSheetData && freshSheetData.length > 0) {
-            // Loop through local items and overwrite localized details using the matching live spreadsheet values
             const translatedFavorites = localFavorites.map((localFav) => {
               const matchedLiveRow = freshSheetData.find(
                 (sheetRow: any) => 
-                  // Matching strategy variant 1: Validate exact match using invariant English schema keys
                   (sheetRow.englishSchemeName && localFav.englishSchemeName && 
                     sheetRow.englishSchemeName.toLowerCase().trim() === localFav.englishSchemeName.toLowerCase().trim()) ||
-                  // Matching strategy variant 2: Direct identifier key alignment checks
                   (localFav.id && sheetRow.id && String(localFav.id).trim().toUpperCase() === String(sheetRow.id).trim().toUpperCase()) ||
-                  // Matching strategy variant 3: Direct baseline validation comparison fallback
                   sheetRow.schemeName.toLowerCase().trim() === localFav.schemeName.toLowerCase().trim()
               );
       
               if (matchedLiveRow) {
                 return {
                   ...localFav,
-                  id: String(matchedLiveRow.id).trim().toUpperCase(), // Enforce unyielding uppercase identifier
+                  id: String(matchedLiveRow.id).trim().toUpperCase(),
                   schemeName: matchedLiveRow.schemeName,
                   englishSchemeName: matchedLiveRow.englishSchemeName || localFav.englishSchemeName,
                   summary: matchedLiveRow.summary,
@@ -123,7 +248,7 @@ export default function SavedScreen() {
               return { ...localFav, id: String(localFav.id).trim().toUpperCase() }; 
             });
       
-            setSavedSchemes(translatedFavorites); // Commit newly computed data to update display lists
+            setSavedSchemes(translatedFavorites);
           } else {
             setSavedSchemes(localFavorites.map(f => ({ ...f, id: String(f.id).trim().toUpperCase() }))); 
           }
@@ -136,12 +261,10 @@ export default function SavedScreen() {
     }, [])
   );
 
-  // ── REMOVE BOOKMARK TRANSACTION  ──
   const handleRemove = async (schemeId: string) => {
     const updated = savedSchemes.filter((s) => s.id !== schemeId); 
     setSavedSchemes(updated); 
     
-    // Write changes immediately across both global cache keys and isolated multi-user profiles
     await AsyncStorage.setItem('savedSchemes', JSON.stringify(updated));
     
     const rawUser = await AsyncStorage.getItem('loggedInUser');
@@ -153,219 +276,206 @@ export default function SavedScreen() {
     }
   };
 
-
-
-  const filterSaved=useMemo(()=>{
+  const filterSaved = useMemo(() => {
     const safeSchemes = savedSchemes || [];
     const cleanQuery = searchQuery.trim().toLowerCase();
 
     if (!cleanQuery) return savedSchemes; 
 
-    return savedSchemes.filter((scheme)=>{
-      const currentLangName=String(scheme.schemeName).toLowerCase();
-      const englishName=String(scheme.englishSchemeName).toLowerCase();
-      return(
-        currentLangName.includes(cleanQuery)||
+    return safeSchemes.filter((scheme) => {
+      const currentLangName = String(scheme.schemeName || '').toLowerCase();
+      const englishName = String(scheme.englishSchemeName || '').toLowerCase();
+      return (
+        currentLangName.includes(cleanQuery) ||
         englishName.includes(cleanQuery)
-      )
-  });
-  },[savedSchemes,searchQuery]);
+      );
+    });
+  }, [savedSchemes, searchQuery]);
 
-
-
-  // Extract translation text dictionary objects mapped to screen language states
-  const t = appDictionary[appLang] || appDictionary.English;
+  const t = ((appDictionary as Record<string, any>)?.[appLang] || (appDictionary as Record<string, any>)?.English || {}) as Record<string, string>;
+  const a11y = A11Y_SAVED_TRANSLATIONS[appLang] || A11Y_SAVED_TRANSLATIONS.English;
 
   return (
-
     <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
-
       {/* ── ACCESSIBLE SEARCH BOX ── */}
       <View style={styles.searchSectionWrapper}>
         <View style={styles.searchContainer}>
-          
-          <Ionicons name="search-sharp" size={22} color="#2563eb" style={styles.searchIcon} />
-            <TextInput
-                style={[styles.searchInput, { fontSize: getFontSize(16) }]} // Respects dynamic font sizes
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder={t.searchSchemesPlaceholder}
-                placeholderTextColor="#64748b"
-                clearButtonMode="while-editing"
-                accessibilityRole="search"
-                accessibilityHint="Type here to instantly filter schemes by name anywhere in the text."
-              />
+          <Ionicons name="search-sharp" size={22} color="#2563eb" style={styles.searchIcon} aria-hidden={true} />
+          <TextInput
+            style={[styles.searchInput, { fontSize: getFontSize(16) }]}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={t.searchSchemesPlaceholder || "Search welfare schemes"}
+            placeholderTextColor="#64748b"
+            clearButtonMode="while-editing"
+            accessibilityRole="search"
+            accessibilityLabel={t.searchSchemesPlaceholder || "Search welfare schemes"}
+            accessibilityHint={a11y.searchHint}
+          />
           {searchQuery.length > 0 && (
-              <TouchableOpacity 
+            <TouchableOpacity 
               onPress={() => setSearchQuery('')} 
               style={styles.clearButton}
               accessibilityRole="button"
-              accessibilityLabel="Clear search text"
-          >
-        <Ionicons name="close-circle" size={20} color="#64748b" />
-      </TouchableOpacity>
-    )}
-  </View>
-</View>
-
-    <ScrollView 
-      style={styles.scrollViewOuter} 
-      contentContainerStyle={styles.container} 
-      keyboardShouldPersistTaps="handled"
-    >
-      {/* Dynamic Accessible Headers mapped to screen scales */}
-      <Text style={[styles.title, { fontSize: getFontSize(32) }]} accessibilityRole="header">
-          {t.savedTitle}
-      </Text>
-      <Text style={[styles.subtitle, { fontSize: getFontSize(16) }]}>{t.savedSubtitle}</Text>
-
-      {/* RENDER SYSTEM BLOCK 1: Empty State Graphic Alert Placeholder Display */}
-      {savedSchemes.length === 0 ? (
-        <View style={styles.emptyContainerCard} accessibilityLabel={`${t.emptySavedMain}. ${t.emptySavedSub}`}>
-          <View style={styles.emptyIconWrapper} aria-hidden={true}>
-            <Ionicons name="bookmark-outline" size={44} color="#94a3b8" />
-          </View>
-          <Text style={[styles.emptyMainText, { fontSize: getFontSize(18) }]}>{t.emptySavedMain}</Text>
-          <Text style={[styles.emptySubText, { fontSize: getFontSize(14) }]}>{t.emptySavedSub}</Text>
+              accessibilityLabel={a11y.clearSearchLabel}
+            >
+              <Ionicons name="close-circle" size={20} color="#64748b" />
+            </TouchableOpacity>
+          )}
         </View>
-      ) : null}
+      </View>
 
-      {/* RENDER SYSTEM BLOCK 2: Map saved records into list layout view cards */}
-      {filterSaved.map((scheme) => {
-        // Evaluate organizational status logic parameter sequences to build dynamic display metadata tags
-        const isGovt = scheme.issuingBody.toLowerCase().includes('govt') || scheme.issuingBody.toLowerCase().includes('goi') || scheme.issuingBody.toLowerCase().includes('national') || scheme.issuingBody.toLowerCase().includes('ministry');
-        const targetUrl = scheme.applicationUrl || 'https://www.swavlambancard.gov.in/';
+      <ScrollView 
+        style={styles.scrollViewOuter} 
+        contentContainerStyle={styles.container} 
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Dynamic Accessible Headers mapped to screen scales */}
+        <Text style={[styles.title, { fontSize: getFontSize(32) }]} accessibilityRole="header">
+          {t.savedTitle || "Saved Schemes"}
+        </Text>
+        <Text style={[styles.subtitle, { fontSize: getFontSize(16) }]}>{t.savedSubtitle || "Your bookmarked welfare programs"}</Text>
 
-        // ── CLIENT-SIDE RECOMMENDATION MATCHING MATRIX FOR SAVED CARDS ──
-        const dynamicSuggestion = rawSuggestions.find(
-          sug => sug.phone === userPhoneState && sug.schemeId === scheme.id
-        );
+        {/* RENDER SYSTEM BLOCK 1: Empty State Graphic Alert Placeholder Display */}
+        {savedSchemes.length === 0 ? (
+          <View style={styles.emptyContainerCard} accessibilityRole="text" accessibilityLabel={`${t.emptySavedMain || 'No saved schemes'}. ${t.emptySavedSub || 'Bookmark programs to view them later'}`}>
+            <View style={styles.emptyIconWrapper} aria-hidden={true}>
+              <Ionicons name="bookmark-outline" size={44} color="#94a3b8" />
+            </View>
+            <Text style={[styles.emptyMainText, { fontSize: getFontSize(18) }]}>{t.emptySavedMain || "No saved schemes"}</Text>
+            <Text style={[styles.emptySubText, { fontSize: getFontSize(14) }]}>{t.emptySavedSub || "Bookmark programs to view them later"}</Text>
+          </View>
+        ) : null}
 
-        const isSuggested = !!dynamicSuggestion; 
-        const operatorName = dynamicSuggestion?.operatorId || 'NGO Team';
-        const suggestionNotes = dynamicSuggestion?.operatorNotes || '';
+        {/* RENDER SYSTEM BLOCK 2: Map saved records into list layout view cards */}
+        {filterSaved.map((scheme) => {
+          const isGovt = scheme.issuingBody.toLowerCase().includes('govt') || scheme.issuingBody.toLowerCase().includes('goi') || scheme.issuingBody.toLowerCase().includes('national') || scheme.issuingBody.toLowerCase().includes('ministry');
+          const targetUrl = scheme.applicationUrl || 'https://www.swavlambancard.gov.in/';
 
-        // Native Browser Launcher action router loop mapping
-        const handleExternalRedirect = async () => {
-          try {
-            const supported = await Linking.canOpenURL(targetUrl);
-            if (supported) {
-              await Linking.openURL(targetUrl); // Handoff process execution context layer directly to mobile OS browser engine
-            } else {
-              Alert.alert('Link Error', 'Cannot launch browser routing for this website target path.');
+          const dynamicSuggestion = rawSuggestions.find(
+            sug => sug.phone === userPhoneState && sug.schemeId === scheme.id
+          );
+
+          const isSuggested = !!dynamicSuggestion; 
+          const operatorName = dynamicSuggestion?.operatorId || 'NGO Team';
+          const suggestionNotes = dynamicSuggestion?.operatorNotes || '';
+
+          const handleExternalRedirect = async () => {
+            try {
+              const supported = await Linking.canOpenURL(targetUrl);
+              if (supported) {
+                await Linking.openURL(targetUrl);
+              } else {
+                Alert.alert(a11y.linkErrorTitle, a11y.linkErrorMsg);
+              }
+            } catch {
+              Alert.alert(a11y.networkIssueTitle, a11y.networkIssueMsg);
             }
-          } catch {
-            Alert.alert('Network Issue', 'Failed to route out to the target server configuration.');
-          }
-        };
+          };
 
-        return (
-          <Pressable 
-            key={scheme.id} 
-            style={[styles.card, isSuggested && styles.suggestedCardHighlight]} 
-            android_ripple={{ color: '#f1f5f9' }}
-            accessibilityRole="button"
-            accessibilityLabel={`${isSuggested ? `NGO Recommended Option by ${operatorName}: ` : ""}Saved Scheme: ${scheme.schemeName}. Category: ${isGovt ? 'Government Welfare' : 'CSR Welfare'}. Organization: ${scheme.issuingBody}.`}
-            accessibilityHint="Double tap to open and review the comprehensive eligibility requirements and procedural steps for this bookmarked item."
-            onPress={() =>
-              // Transition router forward to the scheme details card layout workspace injection engine
-              router.push({
-                pathname: '/scheme-detail',
-                params: {
-                  id: scheme.id,
-                  schemeName: scheme.schemeName,
-                  issuingBody: scheme.issuingBody,
-                  summary: scheme.summary,
-                  eligibility: scheme.eligibility,
-                  howToApply: scheme.howToApply,
-                  applicationUrl: targetUrl,
-                  fromSaved: 'true', // Flag argument ensures back targets path returns cleanly to the bookmarks screen
-                  isSuggested: isSuggested ? 'true' : 'false',
-                  translatedOperatorNotes: suggestionNotes || '', 
-                },
-              } as any)
-            }
-          >
-            {/* ── NGO RECOMMENDATION BANNER ── */}
-            {isSuggested && (
-              <View style={styles.suggestionBannerContainer}>
-                <View style={styles.suggestionBadgeRow}>
-                  <Ionicons name="shield-checkmark" size={16} color="#be185d" />
-                  <Text style={[styles.suggestionBadgeText, { fontSize: getFontSize(13) }]}>
-                    {t.ngoSuggested} ({operatorName})
+          const cardVoiceLabel = `${isSuggested ? `${a11y.recommendedBy} ${operatorName}: ` : ""}${a11y.savedSchemePrefix}: ${scheme.schemeName}. ${a11y.categoryPrefix}: ${isGovt ? a11y.govtTag : a11y.csrTag}. ${a11y.issuedByPrefix}: ${scheme.issuingBody}.`;
+
+          return (
+            <Pressable 
+              key={scheme.id} 
+              style={[styles.card, isSuggested && styles.suggestedCardHighlight]} 
+              android_ripple={{ color: '#f1f5f9' }}
+              accessibilityRole="button"
+              accessibilityLabel={cardVoiceLabel}
+              accessibilityHint={a11y.cardHint}
+              onPress={() =>
+                router.push({
+                  pathname: '/scheme-detail',
+                  params: {
+                    id: scheme.id,
+                    schemeName: scheme.schemeName,
+                    issuingBody: scheme.issuingBody,
+                    summary: scheme.summary,
+                    eligibility: scheme.eligibility,
+                    howToApply: scheme.howToApply,
+                    applicationUrl: targetUrl,
+                    fromSaved: 'true',
+                    isSuggested: isSuggested ? 'true' : 'false',
+                    translatedOperatorNotes: suggestionNotes || '', 
+                  },
+                } as any)
+              }
+            >
+              {/* ── NGO RECOMMENDATION BANNER ── */}
+              {isSuggested && (
+                <View style={styles.suggestionBannerContainer}>
+                  <View style={styles.suggestionBadgeRow}>
+                    <Ionicons name="shield-checkmark" size={16} color="#be185d" aria-hidden={true} />
+                    <Text style={[styles.suggestionBadgeText, { fontSize: getFontSize(13) }]}>
+                      {t.ngoSuggested || "NGO Recommended"} ({operatorName})
+                    </Text>
+                  </View>
+                  
+                  {suggestionNotes ? (
+                    <Text style={[styles.suggestionNotesText, { fontSize: getFontSize(14) }]}>
+                      Note: "{suggestionNotes}"
+                    </Text>
+                  ) : null}
+                </View>
+              )}
+
+              {/* Welfare Program Card Title Row Layout block */}
+              <View style={styles.cardHeader}>
+                <Text style={[styles.schemeName, { fontSize: getFontSize(20) }]} textBreakStrategy="simple">{scheme.schemeName}</Text>
+
+                <View style={[styles.tag, isGovt ? styles.govtTag : styles.csrTag]} aria-hidden={true}>
+                  <Text style={[styles.tagText, { fontSize: getFontSize(12) }, isGovt ? styles.govtTagText : styles.csrTagText]}>
+                    {isGovt ? 'Government' : 'CSR Welfare'}
                   </Text>
                 </View>
-                
-                {suggestionNotes ? (
-                  <Text style={[styles.suggestionNotesText, { fontSize: getFontSize(14) }]}>
-                    Note: "{suggestionNotes}"
-                  </Text>
-                ) : null}
-              </View>
-            )}
-
-            {/* Welfare Program Card Title Row Layout block */}
-            <View style={styles.cardHeader}>
-              <Text style={[styles.schemeName, { fontSize: getFontSize(20) }]} textBreakStrategy="simple">{scheme.schemeName}</Text>
-
-              {/* Dynamic Tag Container: Color styling updates contextually depending on Government vs Private CSR tracking data flags */}
-              <View style={[styles.tag, isGovt ? styles.govtTag : styles.csrTag]} aria-hidden={true}>
-                <Text style={[styles.tagText, { fontSize: getFontSize(12) }, isGovt ? styles.govtTagText : styles.csrTagText]}>
-                  {isGovt ? 'Government' : 'CSR Welfare'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Scheme Summary snippet presentation*/}
-            <Text style={[styles.summary, { fontSize: getFontSize(15) }]} textBreakStrategy="simple">
-              {scheme.summary}
-            </Text>
-
-            {/* Central Call-To-Action Apply Button */}
-            <TouchableOpacity 
-              style={styles.redirectWebButton}
-              onPress={handleExternalRedirect}
-              accessibilityRole="link"
-              accessibilityLabel={`${t.applyButton} for ${scheme.schemeName}`}
-              accessibilityHint="Navigates away from the application layer to launch the form registration inside your device browser."
-            >
-              <Text style={[styles.redirectWebButtonText, { fontSize: getFontSize(15) }]}>{t.applyButton}</Text>
-            </TouchableOpacity>
-
-            {/* Bottom Card Control Action Bar Tray */}
-            <View style={styles.cardFooter}>
-              {/* Department/Issuing Organization indicator metadata tags block */}
-              <View style={styles.footerIconRow}>
-                <Ionicons name="business-outline" size={16} color="#64748b" style={styles.footerIconSpacing} />
-                <Text 
-                  style={[styles.issuingBodyText, { fontSize: getFontSize(14) }]} 
-                  accessibilityLabel={`Issued by: ${scheme.issuingBody}`}
-                  numberOfLines={1} // Prevents extra-long text strings from wrapping out of line alignment boundaries
-                >
-                  {scheme.issuingBody}
-                </Text>
               </View>
 
-              {/* Explicit Bookmark Removal action button wrapper link */}
-              <TouchableOpacity
-                style={styles.removeButton}
-                // e.stopPropagation ensures clicking the nested button area doesn't trigger the root parent card press action handler route
-                onPress={(e) => { e.stopPropagation(); handleRemove(scheme.id); }}
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${scheme.schemeName} out of your saved bookmarks selection checklist.`}
+              <Text style={[styles.summary, { fontSize: getFontSize(15) }]} textBreakStrategy="simple">
+                {scheme.summary}
+              </Text>
+
+              {/* Central Call-To-Action Apply Button */}
+              <TouchableOpacity 
+                style={styles.redirectWebButton}
+                onPress={handleExternalRedirect}
+                accessibilityRole="link"
+                accessibilityLabel={`${t.applyButton || "Apply"} for ${scheme.schemeName}`}
+                accessibilityHint={a11y.applyButtonHint}
               >
-                <Text style={[styles.removeButtonText, { fontSize: getFontSize(14) }]}>{t.removeButton}</Text>
+                <Text style={[styles.redirectWebButtonText, { fontSize: getFontSize(15) }]}>{t.applyButton || "Apply"}</Text>
               </TouchableOpacity>
-            </View>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+
+              {/* Bottom Card Control Action Bar Tray */}
+              <View style={styles.cardFooter}>
+                <View style={styles.footerIconRow} aria-hidden={true}>
+                  <Ionicons name="business-outline" size={16} color="#64748b" style={styles.footerIconSpacing} />
+                  <Text 
+                    style={[styles.issuingBodyText, { fontSize: getFontSize(14) }]} 
+                    numberOfLines={1}
+                  >
+                    {scheme.issuingBody}
+                  </Text>
+                </View>
+
+                {/* Explicit Bookmark Removal action button wrapper link */}
+                <TouchableOpacity 
+                  style={styles.removeButton}
+                  onPress={(e) => { e.stopPropagation(); handleRemove(scheme.id); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${a11y.removePrefix} ${scheme.schemeName} ${a11y.removeSuffix}`}
+                  accessibilityHint={a11y.removeButtonHint}
+                >
+                  <Text style={[styles.removeButtonText, { fontSize: getFontSize(14) }]}>{t.removeButton || "Remove"}</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
 
-// Styles
 const styles = StyleSheet.create({
   scrollViewOuter: { flex: 1, backgroundColor: '#ffffff' },
   container: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 60, paddingBottom: 40, backgroundColor: '#ffffff' },
@@ -387,7 +497,16 @@ const styles = StyleSheet.create({
   footerIconRow: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8 },
   footerIconSpacing: { marginRight: 6 },
   issuingBodyText: { fontSize: 14, fontWeight: '600', color: '#64748b', flex: 1 },
-  removeButton: { borderWidth: 1.5, borderColor: '#ffe4e6', backgroundColor: '#fff1f2', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6, alignItems: 'center', justifyContent: 'center' },
+  removeButton: {
+    borderWidth: 1.5,
+    borderColor: '#ffe4e6',
+    backgroundColor: '#fff1f2',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    minHeight: 48, // Guarantees the 48dp minimum target
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   removeButtonText: { fontSize: 14, fontWeight: '700', color: '#e11d48' },
   emptyContainerCard: { backgroundColor: '#f8fafc', borderRadius: 16, borderWidth: 1.5, borderColor: '#e2e8f0', borderStyle: 'dashed', padding: 32, alignItems: 'center', marginTop: 10 },
   emptyIconWrapper: { marginBottom: 12, justifyContent: 'center', alignItems: 'center' },
@@ -399,7 +518,6 @@ const styles = StyleSheet.create({
   suggestionBadgeText: { color: '#be185d', fontWeight: '800', letterSpacing: 0.3 },
   suggestionNotesText: { color: '#475569', fontWeight: '500', fontStyle: 'italic', paddingLeft: 2 },
 
-
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -409,10 +527,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginVertical: 12,
     paddingHorizontal: 12,
-    height: 48,
-    // Soft shadow framework for Android
+    height: 50,
     elevation: 2, 
-    // Soft shadow framework for iOS
     shadowColor: '#000', 
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -428,16 +544,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   clearButton: {
-    padding: 4,
+    padding: 6,
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-
   searchSectionWrapper: {
     backgroundColor: '#ffffff',
     paddingHorizontal: 20,
-    paddingTop: 54, // Safely clears status bars
+    paddingTop: 54,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9', // Soft separator line before scroll starts
+    borderBottomColor: '#f1f5f9',
   },
-
 });

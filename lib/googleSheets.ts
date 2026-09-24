@@ -296,3 +296,33 @@ export async function submitSchemeSuggestion(payload: {
     return { success: false, message: 'Network connection failed.' };
   }
 }
+
+export async function updateUserProfile(payload: {
+  phone: string;
+  name: string;
+  email: string;
+  disabilityType: string;
+}) {
+  try {
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'updateUser',
+        ...payload,
+      }),
+      redirect: 'follow', // Ensures React Native follows Apps Script's 302 redirect
+    });
+
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      console.warn('updateUserProfile returned non-JSON response:', text);
+      return { success: false, message: text };
+    }
+  } catch (error: any) {
+    console.error('updateUserProfile network error:', error);
+    return { success: false, message: error?.message || 'Network connection failed' };
+  }
+}

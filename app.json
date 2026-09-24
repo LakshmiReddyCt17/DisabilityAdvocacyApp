@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "disability-schemes-app",
+    "name": "Disability Schemes App",
     "slug": "disability-schemes-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,6 +12,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "org.provisionasia.disabilityapp",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -45,6 +47,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": false
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a78ae826-9768-4692-b68c-041b01a52749"
+      }
     }
   }
 }

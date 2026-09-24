@@ -246,11 +246,6 @@ export default function SchemeDetailScreen() {
               </View>
             )}
 
-        <View style={styles.freeBadgeContainer}>
-          <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
-          <Text style={[styles.freeBadgeText, { fontSize: getFontSize(14) }]}>{tGlobal.shareMessage}</Text>
-        </View>
-
         <View style={styles.contentSectionBlockCard}>
           <Text style={[styles.sectionHeadingTitle, { fontSize: getFontSize(16) }]}>{tDetail.summaryHead}</Text>
           <Text style={[styles.bodyDescriptionParaParagraphText, { fontSize: getFontSize(16) }]}>{summary}</Text>

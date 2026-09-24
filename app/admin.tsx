@@ -17,10 +17,7 @@ import {
 } from 'react-native';
 import { addSchemes, getSchemes, getUserByPhone, registerNewNgoOrganization, submitSchemeSuggestion, verifyNgoAdmin } from '../lib/googleSheets';
 
-// Deployment endpoints
-//const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzL5n4f15d-0zN_e13XU4Cclp7Y9M_mN-Y8HwA1GZ4S7o7m3c8d/exec';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQrpJuBbxob2il_yZwOcfG34jyBArDl7I4RYsfH4RKW7q4n7xtBzhQxLpRXdGZPDGPIQ/exec';
-
 
 type DropdownFieldProps = {
   label: string;
@@ -99,6 +96,7 @@ type UserProfile = {
   state: string;
   language: string;
   uid: string;
+  ngoId?: string;
 };
 
 type Grievance = {
@@ -107,14 +105,15 @@ type Grievance = {
   phone: string;
   grievance: string;
   timestamp: string;
+  ngoId?: string;
 };
 
 type AnalyticsRow = {
   timestamp: string;
-  schemeId: string;         // Maps to Spreadsheet Column B (Primary Database ID Variant)
-  schemeName: string;       // Maps to Spreadsheet Column C (Baseline display text title string)
-  disabilityType: string;   // Maps to Spreadsheet Column D (Target beneficiary group category)
-  action: string;           // Maps to Spreadsheet Column E (User tracking event types)
+  schemeId: string;
+  schemeName: string;
+  disabilityType: string;
+  action: string;
   englishSchemeName?: string;
 };
 
@@ -133,8 +132,6 @@ type SchemeStat = {
 };
 
 type Tab = 'beneficiaries' | 'grievances' | 'addscheme' | 'suggestions';
-
-
 
 export default function AdminScreen() {
   const router = useRouter();
@@ -172,25 +169,26 @@ export default function AdminScreen() {
   const [masterSchemesRaw, setMasterSchemesRaw] = useState<any[]>([]);
 
   const [schemeName, setschemeName] = useState('');
-const [issuingBody, setissuingBody] = useState('');
-const [disabilityType, setdisabilityType] = useState('');
-const [schemeSummary, setschemeSummary] = useState('');
-const [schemeEligibility, setschemeEligibility] = useState('');
-const [schemeHowTo, setschemeHowTo] = useState('');
-const [applicationURL, setapplicationURL] = useState('');
-const [ngoName, setngoName] = useState('');
-const [SubmittingScheme, setSubmittingScheme] = useState(false);
+  const [issuingBody, setissuingBody] = useState('');
+  const [disabilityType, setdisabilityType] = useState('');
+  const [schemeSummary, setschemeSummary] = useState('');
+  const [schemeEligibility, setschemeEligibility] = useState('');
+  const [schemeHowTo, setschemeHowTo] = useState('');
+  const [applicationURL, setapplicationURL] = useState('');
+  const [SubmittingScheme, setSubmittingScheme] = useState(false);
+  const [beneficiaryNgoId, setbeneficiaryNgoId] = useState('');
+  const [operatorNgoId, setoperatorNgoId] = useState('');
 
   // Form Submission Handler: Validates administrative session status credentials via spreadsheet registries
   const handleLogin = async () => {
-    if (!password.trim()) {
-      Alert.alert('Required', 'Please enter your organization access passphrase.');
+    if (!password.trim() || !ngoId.trim()) {
+      Alert.alert('Required', 'Please enter your organization ID and passphrase.');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await verifyNgoAdmin(password.trim(),ngoId);
+      const response = await verifyNgoAdmin(password.trim(), ngoId.trim());
 
       if (response.success && response.ngoDetails) {
         const simulatedUserSession = {
@@ -199,6 +197,8 @@ const [SubmittingScheme, setSubmittingScheme] = useState(false);
           ngoId: response.ngoDetails.ngoId,
           onboardingType: 'operator'
         };
+
+        setoperatorNgoId(response.ngoDetails.ngoId);
         
         await AsyncStorage.setItem('loggedInUser', JSON.stringify(simulatedUserSession));
         setAuthenticated(true);
@@ -214,81 +214,74 @@ const [SubmittingScheme, setSubmittingScheme] = useState(false);
     }
   };
 
-// Self-Service NGO Onboarding Dispatch Form Handler
-const handleNgoRegistration = async () => {
-  if (!newNgoName || !password || !newNgoId) {
-    Alert.alert('Missing Info', 'Please complete all required fields.');
-    return;
-  }
-
-  const cleanInputId = newNgoId.trim(); // Normalize ID input to prevent capitalization bypasses
-
-  setLoading(true);
-  try {
-    // 1. Query the live database endpoint to check for uniqueness
-    const checkUrl = `${SCRIPT_URL}?action=checkUniqueNgoId&ngoId=${cleanInputId}`;
-    const checkResponse = await fetch(checkUrl);
-    const checkResult = await checkResponse.json();
-
-    // 2. If the backend reports that the ID is already taken, block the registration flow
-    if (checkResult.success && checkResult.isDuplicate) {
-      Alert.alert(
-        'ID Already Taken ❌', 
-        `The NGO ID "${cleanInputId}" is already registered by another organization. Please choose a different unique identifier.`
-      );
-      setLoading(false);
+  // Self-Service NGO Onboarding Dispatch Form Handler
+  const handleNgoRegistration = async () => {
+    if (!newNgoName.trim() || !password.trim() || !newNgoId.trim()) {
+      Alert.alert('Missing Info', 'Please complete all required fields.');
       return;
     }
 
-    // 3. ID is verified as completely unique -> proceed with registration 
-    const res = await registerNewNgoOrganization({
-      ngoId: cleanInputId,
-      ngoName: newNgoName.trim(),
-      helpline: newNgoPhone.trim(),
-      email: newNgoEmail.trim(),
-      passwordInput: password.trim(),
-    });
+    const cleanInputId = newNgoId.trim();
 
-    if (res.success) {
-      Alert.alert('Success 🎉', 'Your organization account is created! You can now log in using your passphrase.');
-      setIsRegisterMode(false);
-      setNewNgoId('');
-      setNewNgoName('');
-      setNewNgoEmail('');
-      setNewNgoPhone('');
-      setPassword('');
-    } else {
-      Alert.alert('Registration Failed', res.message);
-    }
-  } catch (err) {
-    console.error("NGO Validation error:", err);
-    Alert.alert('Connection Timeout', 'Could not verify ID uniqueness live, continuing with standard registration profile entry...');
+    setLoading(true);
+    try {
+      // 1. Live uniqueness check with redirect follow
+      const checkUrl = `${SCRIPT_URL}?action=checkUniqueNgoId&ngoId=${encodeURIComponent(cleanInputId)}`;
+      const checkResponse = await fetch(checkUrl, {
+        method: 'GET',
+        redirect: 'follow',
+      });
 
-    const res = await registerNewNgoOrganization({
-      ngoId: newNgoId.trim().toUpperCase(),
-      ngoName: newNgoName.trim(),
-      helpline: newNgoPhone.trim(),
-      email: newNgoEmail.trim(),
-      passwordInput: password.trim(),
-    });
-    if (res.success) setIsRegisterMode(false);
+      if (checkResponse.ok) {
+        const text = await checkResponse.text();
+        try {
+          const checkResult = JSON.parse(text);
+          if (checkResult.success && checkResult.isDuplicate) {
+            Alert.alert(
+              'ID Already Taken ❌', 
+              `The NGO ID "${cleanInputId}" is already registered. Please choose a different unique identifier.`
+            );
+            setLoading(false);
+            return;
+          }
+        } catch {
+          // If script does not implement uniqueness check, proceed to register
+        }
+      }
 
+      // 2. Dispatch NGO Registration
+      const res = await registerNewNgoOrganization({
+        ngoId: cleanInputId,
+        ngoName: newNgoName.trim(),
+        helpline: newNgoPhone.trim(),
+        email: newNgoEmail.trim(),
+        passwordInput: password.trim(),
+      });
+
+      if (res && res.success) {
+        Alert.alert('Success 🎉', 'Your organization account has been created! You can now sign in using your passphrase.', [
+          {
+            text: 'Sign In',
+            onPress: () => {
+              setIsRegisterMode(false);
+              setngoId(cleanInputId);
+              setNewNgoId('');
+              setNewNgoName('');
+              setNewNgoEmail('');
+              setNewNgoPhone('');
+              setPassword('');
+            }
+          }
+        ]);
+      } else {
+        Alert.alert('Registration Failed', res?.message || 'Could not register organization.');
+      }
+    } catch (err: any) {
+      console.error("NGO Registration Error:", err);
+      Alert.alert('Network Error', err?.message || 'Could not connect to the server. Please check your connection.');
     } finally {
-    setLoading(false);
-  }
-};
-
-  // Backdoor Bypass System: Simplifies testing workflows inside target sandbox simulators
-  const handleSecretBackdoor = async () => {
-    const backupSession = {
-      userId: 'operator-central_pool',
-      name: 'Central Admin Representative',
-      ngoId: 'CENTRAL_POOL',
-      onboardingType: 'operator'
-    };
-    await AsyncStorage.setItem('loggedInUser', JSON.stringify(backupSession));
-    setAuthenticated(true);
-    loadData();
+      setLoading(false);
+    }
   };
 
   // ── CORE DATA CROSS-REFERENCE MATCH ENGINE ──
@@ -338,10 +331,10 @@ const handleNgoRegistration = async () => {
     setLoading(true);
     try {
       const [userRes, docRes, grievanceRes, analyticsRes, sheetMasterData] = await Promise.all([
-        fetch(`${SCRIPT_URL}?action=getUsers`),
-        fetch(`${SCRIPT_URL}?action=getDocuments`),
-        fetch(`${SCRIPT_URL}?action=getGrievances`),
-        fetch(`${SCRIPT_URL}?action=getAnalytics`),
+        fetch(`${SCRIPT_URL}?action=getUsers`, { redirect: 'follow' }),
+        fetch(`${SCRIPT_URL}?action=getDocuments`, { redirect: 'follow' }),
+        fetch(`${SCRIPT_URL}?action=getGrievances`, { redirect: 'follow' }),
+        fetch(`${SCRIPT_URL}?action=getAnalytics`, { redirect: 'follow' }),
         getSchemes('English').catch(() => []), 
       ]);
 
@@ -350,41 +343,68 @@ const handleNgoRegistration = async () => {
       const grievanceData = await grievanceRes.json();
       const analyticsData = await analyticsRes.json();
 
-      if (userData.success) setUsers(userData.users);
-      if (docData.success) setDocuments(docData.documents);
-      if (grievanceData.success) setGrievances(grievanceData.grievances);
+      if (userData.success && Array.isArray(userData.users)) {
+        const rawOperator = await AsyncStorage.getItem('loggedInUser');
+        const operatorProfile = rawOperator ? JSON.parse(rawOperator) : {};
+        const activeNgoId = String(operatorProfile.ngoId || operatorNgoId || 'CENTRAL_POOL').trim().toUpperCase();
       
-    // 2. Extract the true master schemes array out of the JSON response envelope safely
-    let freshMasterSchemes: any[] = [];
-    if (sheetMasterData) {
-      if (sheetMasterData.schemes && Array.isArray(sheetMasterData.schemes)) {
-        freshMasterSchemes = sheetMasterData.schemes;
-      } else if (Array.isArray(sheetMasterData)) {
-        freshMasterSchemes = sheetMasterData;
+        if (activeNgoId === 'CENTRAL_POOL') {
+          setUsers(userData.users);
+        } else {
+          const tenantUsers = userData.users.filter((user: UserProfile) => {
+            const userNgo = String(user.ngoId || 'CENTRAL_POOL').trim().toUpperCase();
+            return userNgo === activeNgoId;
+          });
+          setUsers(tenantUsers);
+        }
       }
-    }
+      if (docData.success) setDocuments(docData.documents);
+      //if (grievanceData.success) setGrievances(grievanceData.grievances);
+      if (grievanceData.success && Array.isArray(grievanceData.grievances)) {
+        const rawOperator = await AsyncStorage.getItem('loggedInUser');
+        const operatorProfile = rawOperator ? JSON.parse(rawOperator) : {};
+        const activeNgoId = String(operatorProfile.ngoId || operatorNgoId || 'CENTRAL_POOL').trim().toUpperCase();
 
-    // 3. Map keys explicitly to ensure everything aligns perfectly with the UI filtering expectations
-    const normalizedSchemes = freshMasterSchemes.map((s: any) => ({
-      id: String(s.id || '').trim().toUpperCase(),
-      schemeName: String(s.schemeName || s.englishSchemeName || '').trim(),
-      issuingBody: String(s.issuingBody || '').trim(),
-      disabilityType: String(s.disabilityType || '').trim(),
-      summary: String(s.summary || '').trim(),
-      eligibility: String(s.eligibility || '').trim(),
-      howToApply: String(s.howToApply || '').trim(),
-      applicationUrl: String(s.applicationUrl || 'https://www.swavlambancard.gov.in/').trim(),
-    }));
+        if (activeNgoId === 'CENTRAL_POOL') {
+          setGrievances(grievanceData.grievances);
+        } else {
+          const tenantGrievances = grievanceData.grievances.filter((g: any) => {
+            const gNgo = String(g.ngoId || 'CENTRAL_POOL').trim().toUpperCase();
+            return gNgo === activeNgoId;
+          });
+          setGrievances(tenantGrievances);
+        }
+      }
+      
+      let freshMasterSchemes: any[] = [];
+      if (sheetMasterData) {
+        if (sheetMasterData.schemes && Array.isArray(sheetMasterData.schemes)) {
+          freshMasterSchemes = sheetMasterData.schemes;
+        } else if (Array.isArray(sheetMasterData)) {
+          freshMasterSchemes = sheetMasterData;
+        }
+      }
 
-    setMasterSchemesRaw(normalizedSchemes);
+      const normalizedSchemes = freshMasterSchemes.map((s: any) => ({
+        id: String(s.id || '').trim().toUpperCase(),
+        schemeName: String(s.schemeName || s.englishSchemeName || '').trim(),
+        issuingBody: String(s.issuingBody || '').trim(),
+        disabilityType: String(s.disabilityType || '').trim(),
+        summary: String(s.summary || '').trim(),
+        eligibility: String(s.eligibility || '').trim(),
+        howToApply: String(s.howToApply || '').trim(),
+        applicationUrl: String(s.applicationUrl || 'https://www.swavlambancard.gov.in/').trim(),
+      }));
+
+      setMasterSchemesRaw(normalizedSchemes);
 
       if (analyticsData.success && analyticsData.analytics) {
         setSchemeStats(processAnalytics(analyticsData.analytics, sheetMasterData));
       }
     } catch (err: any) {
       console.log("=== ADM_SYNC_ERROR_LOG ===", err?.message || err);
-      Alert.alert('Sync Error', `Failed to fetch updated records. Error details: ${err?.message || 'Check terminal'}`);
-    }  finally {
+      Alert.alert('Sync Error', `Failed to fetch updated records. Error details: ${err?.message || 'Check connection'}`);
+    } finally {
       setLoading(false);
     }
   };
@@ -404,22 +424,18 @@ const handleNgoRegistration = async () => {
     try {
       const rawOperator = await AsyncStorage.getItem('loggedInUser');
       const operatorProfile = rawOperator ? JSON.parse(rawOperator) : {};
-      const operatorNgoId = operatorProfile.ngoId || 'CENTRAL_POOL';
 
       const result = await getUserByPhone(textInputStr);
       
       if (result) {
-        // Enforce clean, lowercase, trimmed string normalization to bypass spreadsheet spacing bugs
-        const beneficiaryNgoId = String(result.ngoId || 'CENTRAL_POOL').trim().toUpperCase();
-        const operatorNgoId = String(operatorProfile.ngoId || 'CENTRAL_POOL').trim().toUpperCase();
+        const bNgoId = String(result.ngoId || 'CENTRAL_POOL').trim().toUpperCase();
+        const oNgoId = String(operatorProfile.ngoId || 'CENTRAL_POOL').trim().toUpperCase();
 
-        console.log("=== MULTI-TENANT DEBUG ===");
-        console.log("Logged In Operator NGO:", operatorNgoId);
-        console.log("Target User Spreadsheet NGO:", beneficiaryNgoId);
+        setbeneficiaryNgoId(bNgoId);
+        setoperatorNgoId(oNgoId);
 
-        // Strict client-side multi-tenant isolation sandbox guard gate with clean normalization strings
-        if (beneficiaryNgoId !== operatorNgoId && operatorNgoId !== 'CENTRAL_POOL') {
-          Alert.alert('Access Denied', `This beneficiary profile is managed by an another organization. (User: ${beneficiaryNgoId}, Admin: ${operatorNgoId})`);
+        if (bNgoId !== oNgoId && oNgoId !== 'CENTRAL_POOL') {
+          Alert.alert('Access Denied', `This beneficiary profile is managed by another organization. (User: ${bNgoId}, Admin: ${oNgoId})`);
           setSearchingUser(false);
           return;
         }
@@ -429,7 +445,7 @@ const handleNgoRegistration = async () => {
           name: result.name,
           phone: result.phone,
           disabilityType: result.disabilityType,
-          ngoId: beneficiaryNgoId,
+          ngoId: bNgoId,
         });
       } else {
         Alert.alert('Not Found', 'No beneficiary found matching this mobile number.');
@@ -456,7 +472,7 @@ const handleNgoRegistration = async () => {
       const computedNgoGroup = operatorProfile.ngoId || 'CENTRAL_POOL';
 
       const response = await submitSchemeSuggestion({
-        phone: foundUser.phone,        // 👈 Fixed parameter path maps directly to mobile strings
+        phone: foundUser.phone,
         schemeId: selectedSchemeId,
         operatorId: `${computedStaffId} (${computedNgoGroup})`,
         operatorNotes: operatorNotes.trim(),
@@ -471,7 +487,7 @@ const handleNgoRegistration = async () => {
         Alert.alert('Error', response.message);
       }
     } catch {
-      Alert.alert('Network Error', 'Failed to complete transaction blocks.');
+      Alert.alert('Network Error', 'Failed to complete transaction.');
     } finally {
       setSubmittingSuggestion(false);
     }
@@ -491,6 +507,7 @@ const handleNgoRegistration = async () => {
           status: newStatus,
           adminMessage: messageText,
         }),
+        redirect: 'follow',
       });
       const data = await res.json();
       if (data.success) {
@@ -551,64 +568,63 @@ const handleNgoRegistration = async () => {
     return '#fef3c7';
   };
 
-  
-const handleSendScheme = async () => {
- 
-  setSubmittingScheme(true);
-  try {
-    const rawOperator = await AsyncStorage.getItem('loggedInUser');
-    const operatorProfile = rawOperator ? JSON.parse(rawOperator) : {};
-    
-    const computedStaffId = operatorProfile.name || 'Staff';
-    const computedNgoGroup = operatorProfile.ngoId || 'CENTRAL_POOL';
+  const handleSendScheme = async () => {
+    setSubmittingScheme(true);
+    try {
+      const response = await addSchemes({
+        schemeName: schemeName,
+        issuingBody: issuingBody,
+        disabilityType: disabilityType,
+        schemeSummary: schemeSummary,
+        eligibility: schemeEligibility,
+        howToApply: schemeHowTo,
+        applicationUrl: applicationURL,
+      });
 
-    const response = await addSchemes({
-      schemeName:schemeName,
-      issuingBody:issuingBody,
-      disabilityType:disabilityType,
-      schemeSummary:schemeSummary,
-      eligibility:schemeEligibility,
-      howToApply:schemeHowTo,
-      applicationUrl:applicationURL,
-    });
-
-    if (response.success) {
-      Alert.alert('Success 🎉', 'Scheme recommendation pinned onto beneficiary\'s dashboard.', [
-        { text: 'Done', onPress: () => { setschemeName(''); setissuingBody(''); setschemeEligibility(''); setschemeHowTo('');setapplicationURL('');setngoName('');setSubmittingScheme(false); setschemeSummary('');setdisabilityType('');} }
-      ]);
-    } else {
-      Alert.alert('Error', response.message);
+      if (response.success) {
+        Alert.alert('Success 🎉', 'Scheme has been added to the system.', [
+          { 
+            text: 'Done', 
+            onPress: () => { 
+              setschemeName(''); 
+              setissuingBody(''); 
+              setschemeEligibility(''); 
+              setschemeHowTo('');
+              setapplicationURL('');
+              setschemeSummary('');
+              setdisabilityType('');
+              loadData();
+            } 
+          }
+        ]);
+      } else {
+        Alert.alert('Error', response.message);
+      }
+    } catch {
+      Alert.alert('Network Error', 'Failed to publish scheme.');
+    } finally {
+      setSubmittingScheme(false);
     }
-  } catch {
-    Alert.alert('Network Error', 'Failed to complete transaction blocks.');
-  } finally {
-    setSubmittingScheme(false);
-  }
-};
+  };
 
-
-
-
-  // AUTHENTICATION GATE CONDITIONAL LAYOUT
+  // ── AUTHENTICATION GATE SCREEN ──
   if (!authenticated) {
     return (
       <View style={styles.loginContainer}>
         <Text style={styles.loginTitle}>{isRegisterMode ? 'Register NGO' : 'Volunteer Portal'}</Text>
-        {/*<TouchableOpacity activeOpacity={1} onPress={handleSecretBackdoor}>
-          <Text style={styles.loginSubtitle}>ProVision Asia • Multi-Tenant Partner Space</Text>
-        </TouchableOpacity>*/}
         <Text style={styles.loginSubtitle}>ProVision Asia • Multi-Tenant Partner Space</Text>
-        {isRegisterMode && (
+
+        {isRegisterMode ? (
           <>
-          <TextInput
+            <TextInput
               style={styles.loginInput}
               value={newNgoId}
               onChangeText={setNewNgoId}
-              placeholder="Organization Id (Any unique identifier)"
+              placeholder="Organization ID (e.g. NGO_BLR_01)"
               placeholderTextColor="#6b7280"
+              autoCapitalize="characters"
             />
-          <Text style={styles.loginUnderSub}>Please remember this username to login</Text>
-
+            <Text style={styles.loginUnderSub}>Please remember this username/ID to log in later</Text>
 
             <TextInput
               style={styles.loginInput}
@@ -624,6 +640,7 @@ const handleSendScheme = async () => {
               placeholder="Official Contact Email Address"
               placeholderTextColor="#6b7280"
               keyboardType="email-address"
+              autoCapitalize="none"
             />
             <TextInput
               style={styles.loginInput}
@@ -635,15 +652,16 @@ const handleSendScheme = async () => {
               maxLength={10}
             />
           </>
+        ) : (
+          <TextInput
+            style={styles.loginInput}
+            value={ngoId}
+            onChangeText={setngoId}
+            placeholder="Enter Organization ID"
+            placeholderTextColor="#6b7280"
+            autoCapitalize="characters"
+          />
         )}
-
-    <TextInput
-          style={styles.loginInput}
-          value={ngoId}
-          onChangeText={setngoId}
-          placeholder={isRegisterMode ? "" : "Enter organization username"}
-          placeholderTextColor="#6b7280"
-        />
 
         <TextInput
           style={styles.loginInput}
@@ -654,8 +672,18 @@ const handleSendScheme = async () => {
           secureTextEntry
         />
 
-        <TouchableOpacity style={styles.loginButton} onPress={isRegisterMode ? handleNgoRegistration : handleLogin}>
-          {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.loginButtonText}>{isRegisterMode ? 'Create NGO Space' : 'Authorize Session'}</Text>}
+        <TouchableOpacity 
+          style={styles.loginButton} 
+          onPress={isRegisterMode ? handleNgoRegistration : handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <Text style={styles.loginButtonText}>
+              {isRegisterMode ? 'Create NGO Space' : 'Authorize Session'}
+            </Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => { setIsRegisterMode(!isRegisterMode); setPassword(''); }}>
@@ -671,484 +699,398 @@ const handleSendScheme = async () => {
     );
   }
 
- // AUTHENTICATION GATE CONDITIONAL LAYOUT
- if (!authenticated) {
+  // ── CORE PANEL WORKSPACE ──
   return (
-    <View style={styles.loginContainer}>
-      <Text style={styles.loginTitle}>{isRegisterMode ? 'Register NGO' : 'Volunteer Portal'}</Text>
-      {/*<TouchableOpacity activeOpacity={1} onPress={handleSecretBackdoor}>
-        <Text style={styles.loginSubtitle}>ProVision Asia • Multi-Tenant Partner Space</Text>
-      </TouchableOpacity>*/}
-      <Text style={styles.loginSubtitle}>ProVision Asia • Multi-Tenant Partner Space</Text>
-      {isRegisterMode && (
-        <>
-        <TextInput
-            style={styles.loginInput}
-            value={newNgoId}
-            onChangeText={setNewNgoId}
-            placeholder="Organization Id (Any unique identifier)"
-            placeholderTextColor="#6b7280"
-          />
-          <TextInput
-            style={styles.loginInput}
-            value={newNgoName}
-            onChangeText={setNewNgoName}
-            placeholder="Organization Name (e.g., VNA India)"
-            placeholderTextColor="#6b7280"
-          />
-          <TextInput
-            style={styles.loginInput}
-            value={newNgoEmail}
-            onChangeText={setNewNgoEmail}
-            placeholder="Official Contact Email Address"
-            placeholderTextColor="#6b7280"
-            keyboardType="email-address"
-          />
-          <TextInput
-            style={styles.loginInput}
-            value={newNgoPhone}
-            onChangeText={setNewNgoPhone}
-            placeholder="Helpline Number (10 digits)"
-            placeholderTextColor="#6b7280"
-            keyboardType="phone-pad"
-            maxLength={10}
-          />
-        </>
-      )}
-
-      <TextInput
-        style={styles.loginInput}
-        value={password}
-        onChangeText={setPassword}
-        placeholder={isRegisterMode ? "Choose a secure access password" : "Enter organization passphrase key"}
-        placeholderTextColor="#6b7280"
-        secureTextEntry
-      />
-
-      <TouchableOpacity style={styles.loginButton} onPress={isRegisterMode ? handleNgoRegistration : handleLogin}>
-        {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.loginButtonText}>{isRegisterMode ? 'Create NGO Space' : 'Authorize Session'}</Text>}
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => { setIsRegisterMode(!isRegisterMode); setPassword(''); }}>
-        <Text style={{ textAlign: 'center', color: '#2563eb', fontWeight: '600', marginBottom: 16, fontSize: 15 }}>
-          {isRegisterMode ? '← Already registered? Sign In' : 'Register a new NGO Organization'}
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => router.back()}>
-        <Text style={styles.backText}>← Return to Main Application</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-// CORE PANEL WORKSPACE VIEWSPACE PRESENTATION LAYERS
-return (
-  <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Admin Panel</Text>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backLink}>Exit System</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tab Selection Row Switch Bar */}
-      <View style={styles.tabRow}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'beneficiaries' && styles.tabActive]}
-          onPress={() => setActiveTab('beneficiaries')}>
-          <View style={styles.tabContentRow}>
-            <Ionicons name="people" size={16} color={activeTab === 'beneficiaries' ? '#ffffff' : '#6b7280'} />
-            <Text style={[styles.tabText, activeTab === 'beneficiaries' && styles.tabTextActive]}>Users</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'grievances' && styles.tabActive]}
-          onPress={() => setActiveTab('grievances')}>
-          <View style={styles.tabContentRow}>
-            <Ionicons name="document-text" size={16} color={activeTab === 'grievances' ? '#ffffff' : '#6b7280'} />
-            <Text style={[styles.tabText, activeTab === 'grievances' && styles.tabTextActive]}>Grievances</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'addscheme' && styles.tabActive]}
-          onPress={() => setActiveTab('addscheme')}>
-          <View style={styles.tabContentRow}>
-            <Ionicons name="add-outline" size={16} color={activeTab === 'addscheme' ? '#ffffff' : '#6b7280'} />
-            <Text style={[styles.tabText, activeTab === 'addscheme' && styles.tabTextActive]}>New Scheme</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'suggestions' && styles.tabActive]}
-          onPress={() => setActiveTab('suggestions')}>
-          <View style={styles.tabContentRow}>
-            <Ionicons name="sparkles" size={16} color={activeTab === 'suggestions' ? '#ffffff' : '#6b7280'} />
-            <Text style={[styles.tabText, activeTab === 'suggestions' && styles.tabTextActive]}>Suggest</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
-        <View style={styles.refreshContentRow}>
-          <Ionicons name="refresh-outline" size={16} color="#2563eb" />
-          <Text style={styles.refreshText}>Refresh Data</Text>
+    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Admin Panel</Text>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={styles.backLink}>Exit System</Text>
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
 
-      {loading && <ActivityIndicator size="large" color="#2563eb" style={{ marginVertical: 20 }} />}
+        {/* Tab Selection Switch Bar */}
+        <View style={styles.tabRow}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'beneficiaries' && styles.tabActive]}
+            onPress={() => setActiveTab('beneficiaries')}>
+            <View style={styles.tabContentRow}>
+              <Ionicons name="people" size={16} color={activeTab === 'beneficiaries' ? '#ffffff' : '#6b7280'} />
+              <Text style={[styles.tabText, activeTab === 'beneficiaries' && styles.tabTextActive]}>Users</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'grievances' && styles.tabActive]}
+            onPress={() => setActiveTab('grievances')}>
+            <View style={styles.tabContentRow}>
+              <Ionicons name="document-text" size={16} color={activeTab === 'grievances' ? '#ffffff' : '#6b7280'} />
+              <Text style={[styles.tabText, activeTab === 'grievances' && styles.tabTextActive]}>Grievances</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'addscheme' && styles.tabActive]}
+            onPress={() => setActiveTab('addscheme')}>
+            <View style={styles.tabContentRow}>
+              <Ionicons name="add-outline" size={16} color={activeTab === 'addscheme' ? '#ffffff' : '#6b7280'} />
+              <Text style={[styles.tabText, activeTab === 'addscheme' && styles.tabTextActive]}>New Scheme</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'suggestions' && styles.tabActive]}
+            onPress={() => setActiveTab('suggestions')}>
+            <View style={styles.tabContentRow}>
+              <Ionicons name="sparkles" size={16} color={activeTab === 'suggestions' ? '#ffffff' : '#6b7280'} />
+              <Text style={[styles.tabText, activeTab === 'suggestions' && styles.tabTextActive]}>Suggest</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
 
-      {/* ── TAB LAYOUT SCREEN MODULE ONE: REGISTERED USERS ── */}
-      {!loading && activeTab === 'beneficiaries' && (
-        <View>
-          {users.length === 0 ? (
-            <Text style={styles.emptyText}>No registered beneficiaries found.</Text>
-          ) : (
-            users.map((user, uIdx) => {
-              const matchedDocs = documents.filter(d => {
-                const docUserId = String(d.userId).trim().toLowerCase();
-                const profileUserId = String(user.userId || '').trim().toLowerCase();
-                const profilePhone = String(user.phone || '').trim().toLowerCase();
-                return (profileUserId !== '' && docUserId === profileUserId) ||
-                  (profilePhone !== '' && docUserId === profilePhone);
-              });
+        <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
+          <View style={styles.refreshContentRow}>
+            <Ionicons name="refresh-outline" size={16} color="#2563eb" />
+            <Text style={styles.refreshText}>Refresh Data</Text>
+          </View>
+        </TouchableOpacity>
 
-              return (
-                <View key={`user-${user.userId}-${uIdx}`} style={styles.profileCardContainer}>
-                  <View style={styles.profileHeaderBlock}>
-                    <Text style={styles.profileCardName}>{user.name || 'Unnamed'}</Text>
-                    
-                    <View style={styles.metadataInlineIconRow}>
-                      <Ionicons name="call-outline" size={14} color="#4b5563" style={styles.inlineIconSpacing} />
-                      <Text style={styles.profileCardSubText}>{user.phone}</Text>
-                    </View>
-                    <View style={styles.metadataInlineIconRow}>
-                      <Ionicons name="body-outline" size={14} color="#4b5563" style={styles.inlineIconSpacing} />
-                      <Text style={styles.profileCardSubText}>{user.disabilityType}</Text>
-                    </View>
-                    <View style={styles.metadataInlineIconRow}>
-                      <Ionicons name="globe-outline" size={14} color="#4b5563" style={styles.inlineIconSpacing} />
-                      <Text style={styles.profileCardSubText}>{user.state} • {user.language}</Text>
-                    </View>
-                  </View>
+        {loading && <ActivityIndicator size="large" color="#2563eb" style={{ marginVertical: 20 }} />}
 
-                  <Text style={styles.nestedDocHeader}>Documents ({matchedDocs.length})</Text>
+        {/* ── TAB 1: REGISTERED BENEFICIARIES ── */}
+        {!loading && activeTab === 'beneficiaries' && (
+          <View>
+            {users.length === 0 ? (
+              <Text style={styles.emptyText}>No registered beneficiaries found.</Text>
+            ) : (
+              users.map((user, uIdx) => {
+                const matchedDocs = documents.filter(d => {
+                  const docUserId = String(d.userId).trim().toLowerCase();
+                  const profileUserId = String(user.userId || '').trim().toLowerCase();
+                  const profilePhone = String(user.phone || '').trim().toLowerCase();
+                  return (profileUserId !== '' && docUserId === profileUserId) ||
+                    (profilePhone !== '' && docUserId === profilePhone);
+                });
 
-                  {matchedDocs.length === 0 ? (
-                    <Text style={styles.noDocText}>No documents submitted yet.</Text>
-                  ) : (
-                    matchedDocs.map((doc, dIdx) => (
-                      <View key={`doc-${doc.documentId}-${dIdx}`} style={styles.nestedDocItemCard}>
-                        <Text style={styles.docTitleText}>{doc.fileName}</Text>
-                        <Text style={styles.docMetaLabel}>{doc.documentType}</Text>
-
-                        <View style={[styles.statusBadge, { backgroundColor: getStatusBg(doc.status) }]}>
-                          <Text style={[styles.statusText, { color: getStatusColor(doc.status) }]}>{doc.status}</Text>
-                        </View>
-
-                        {doc.adminMessage ? (
-                          <View style={styles.adminMessageDisplayBox}>
-                            <Ionicons name="clipboard-outline" size={14} color="#991b1b" style={{ marginRight: 6 }} />
-                            <Text style={styles.adminMessageDisplayText}>"{doc.adminMessage}"</Text>
-                          </View>
-                        ) : null}
-
-                        <TouchableOpacity style={styles.viewDocumentLinkButton} onPress={() => viewDocumentFile(doc.fileUrl)}>
-                          <View style={styles.innerButtonFlexRow}>
-                            <Ionicons name="eye-outline" size={16} color="#2563eb" style={{ marginRight: 6 }} />
-                            <Text style={styles.viewDocumentText}>View Document</Text>
-                          </View>
-                        </TouchableOpacity>
-
-                        <Text style={styles.actionStateHeaderLabel}>Update Status:</Text>
-                        <View style={styles.statusButtonRow}>
-                          {['Verified', 'Pending', 'Action Required'].map(statusOption => (
-                            <TouchableOpacity
-                              key={statusOption}
-                              style={[
-                                styles.statusButton,
-                                doc.status === statusOption && styles.statusButtonActive,
-                                updatingId === doc.documentId && styles.statusButtonDisabled,
-                              ]}
-                              disabled={updatingId === doc.documentId}
-                              onPress={() => handleStatusUpdate(doc.documentId, user.userId, statusOption)}>
-                              <Text style={[styles.statusButtonText, doc.status === statusOption && styles.statusButtonTextActive]}>
-                                {statusOption}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
+                return (
+                  <View key={`user-${user.userId}-${uIdx}`} style={styles.profileCardContainer}>
+                    <View style={styles.profileHeaderBlock}>
+                      <Text style={styles.profileCardName}>{user.name || 'Unnamed'}</Text>
+                      
+                      <View style={styles.metadataInlineIconRow}>
+                        <Ionicons name="call-outline" size={14} color="#4b5563" style={styles.inlineIconSpacing} />
+                        <Text style={styles.profileCardSubText}>{user.phone}</Text>
                       </View>
-                    ))
-                  )}
-                </View>
-              );
-            })
-          )}
-        </View>
-      )}
+                      <View style={styles.metadataInlineIconRow}>
+                        <Ionicons name="body-outline" size={14} color="#4b5563" style={styles.inlineIconSpacing} />
+                        <Text style={styles.profileCardSubText}>{user.disabilityType}</Text>
+                      </View>
+                      <View style={styles.metadataInlineIconRow}>
+                        <Ionicons name="globe-outline" size={14} color="#4b5563" style={styles.inlineIconSpacing} />
+                        <Text style={styles.profileCardSubText}>{user.state} • {user.language}</Text>
+                      </View>
+                    </View>
 
-      {/* ── TAB LAYOUT SCREEN MODULE TWO: GRIEVANCES ── */}
-      {!loading && activeTab === 'grievances' && (
-        <View>
-          {grievances.length === 0 ? (
-            <Text style={styles.emptyText}>No grievances submitted yet.</Text>
-          ) : (
-            grievances.map((g, gIdx) => (
-              <View key={`grievance-${g.userId}-${gIdx}`} style={styles.card}>
-                <Text style={styles.cardTitle}>{g.name}</Text>
-                <View style={styles.metadataInlineIconRow}>
-                  <Ionicons name="call-outline" size={14} color="#374151" style={styles.inlineIconSpacing} />
-                  <Text style={styles.cardMeta}>{g.phone}</Text>
-                </View>
-                <View style={styles.metadataInlineIconRow}>
-                  <Ionicons name="time-outline" size={14} color="#374151" style={styles.inlineIconSpacing} />
-                  <Text style={styles.cardMeta}>{g.timestamp}</Text>
-                </View>
-                <View style={styles.grievanceBox}>
-                  <Text style={styles.grievanceText}>{g.grievance}</Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-      )}
+                    <Text style={styles.nestedDocHeader}>Documents ({matchedDocs.length})</Text>
 
-      
+                    {matchedDocs.length === 0 ? (
+                      <Text style={styles.noDocText}>No documents submitted yet.</Text>
+                    ) : (
+                      matchedDocs.map((doc, dIdx) => (
+                        <View key={`doc-${doc.documentId}-${dIdx}`} style={styles.nestedDocItemCard}>
+                          <Text style={styles.docTitleText}>{doc.fileName}</Text>
+                          <Text style={styles.docMetaLabel}>{doc.documentType}</Text>
 
-      
-{/* ── TAB LAYOUT SCREEN MODULE FOUR: SCHEME SUBMIT FORM VIEW ── */}
-{!loading && activeTab === 'addscheme' && (
+                          <View style={[styles.statusBadge, { backgroundColor: getStatusBg(doc.status) }]}>
+                            <Text style={[styles.statusText, { color: getStatusColor(doc.status) }]}>{doc.status}</Text>
+                          </View>
+
+                          {doc.adminMessage ? (
+                            <View style={styles.adminMessageDisplayBox}>
+                              <Ionicons name="clipboard-outline" size={14} color="#991b1b" style={{ marginRight: 6 }} />
+                              <Text style={styles.adminMessageDisplayText}>"{doc.adminMessage}"</Text>
+                            </View>
+                          ) : null}
+
+                          <TouchableOpacity style={styles.viewDocumentLinkButton} onPress={() => viewDocumentFile(doc.fileUrl)}>
+                            <View style={styles.innerButtonFlexRow}>
+                              <Ionicons name="eye-outline" size={16} color="#2563eb" style={{ marginRight: 6 }} />
+                              <Text style={styles.viewDocumentText}>View Document</Text>
+                            </View>
+                          </TouchableOpacity>
+
+                          <Text style={styles.actionStateHeaderLabel}>Update Status:</Text>
+                          <View style={styles.statusButtonRow}>
+                            {['Verified', 'Pending', 'Action Required'].map(statusOption => (
+                              <TouchableOpacity
+                                key={statusOption}
+                                style={[
+                                  styles.statusButton,
+                                  doc.status === statusOption && styles.statusButtonActive,
+                                  updatingId === doc.documentId && styles.statusButtonDisabled,
+                                ]}
+                                disabled={updatingId === doc.documentId}
+                                onPress={() => handleStatusUpdate(doc.documentId, user.userId, statusOption)}>
+                                <Text style={[styles.statusButtonText, doc.status === statusOption && styles.statusButtonTextActive]}>
+                                  {statusOption}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
+
+        {/* ── TAB 2: GRIEVANCES ── */}
+        {!loading && activeTab === 'grievances' && (
+          <View>
+            {grievances.length === 0 ? (
+              <Text style={styles.emptyText}>No grievances submitted yet.</Text>
+            ) : (
+              grievances.map((g, gIdx) => (
+                <View key={`grievance-${g.userId}-${gIdx}`} style={styles.card}>
+                  <Text style={styles.cardTitle}>{g.name}</Text>
+                  <View style={styles.metadataInlineIconRow}>
+                    <Ionicons name="call-outline" size={14} color="#374151" style={styles.inlineIconSpacing} />
+                    <Text style={styles.cardMeta}>{g.phone}</Text>
+                  </View>
+                  <View style={styles.metadataInlineIconRow}>
+                    <Ionicons name="time-outline" size={14} color="#374151" style={styles.inlineIconSpacing} />
+                    <Text style={styles.cardMeta}>{g.timestamp}</Text>
+                  </View>
+                  <View style={styles.grievanceBox}>
+                    <Text style={styles.grievanceText}>{g.grievance}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* ── TAB 3: SCHEME SUBMIT FORM ── */}
+        {!loading && activeTab === 'addscheme' && (
           <View style={styles.suggestionFormWrapper}>
             <Text style={styles.formHeaderLabelTitle}>Curate New Scheme</Text>
-            
 
-                <Text style={styles.formSectionSubLabelHeadingText}>Scheme Name</Text>
-                <TextInput
-                  style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
-                  value={schemeName}
-                  onChangeText={setschemeName}
-                  placeholder="Add New Scheme's Name"
-                  placeholderTextColor="#a1a1aa"
-                  multiline
-                  numberOfLines={1}
-                />
+            <Text style={styles.formSectionSubLabelHeadingText}>Scheme Name</Text>
+            <TextInput
+              style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
+              value={schemeName}
+              onChangeText={setschemeName}
+              placeholder="Add New Scheme's Name"
+              placeholderTextColor="#a1a1aa"
+              multiline
+              numberOfLines={1}
+            />
 
+            <Text style={styles.formSectionSubLabelHeadingText}>Issuing Body</Text>
+            <TextInput
+              style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
+              value={issuingBody}
+              onChangeText={setissuingBody}
+              placeholder="Set Issuing Body as Govt/CSR Only"
+              placeholderTextColor="#a1a1aa"
+              multiline
+              numberOfLines={1}
+            />
 
-              <Text style={styles.formSectionSubLabelHeadingText}>Issuing Body</Text>
-                <TextInput
-                  style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
-                  value={issuingBody}
-                  onChangeText={setissuingBody}
-                  placeholder="Set Issuing Body as Govt/CSR Only"
-                  placeholderTextColor="#a1a1aa"
-                  multiline
-                  numberOfLines={1}
-                />
-              <Text style={styles.formSectionSubLabelHeadingText}>Disability Type</Text>
-              {/*<!--Disability Type--> */}       
-              <DropdownField
+            <Text style={styles.formSectionSubLabelHeadingText}>Disability Type</Text>
+            <DropdownField
               label="Disability Type *"
               value={disabilityType}
               onSelect={setdisabilityType}
               placeholder="Select disability type"
               options={[
-          'Locomotor Disability',
-          'Visual Impairment',
-          'Hearing Impairment',
-          'Intellectual Disability',
-          'Autism Spectrum Disorder',
-          'Multiple Disabilities',
+                'Locomotor Disability',
+                'Visual Impairment',
+                'Hearing Impairment',
+                'Intellectual Disability',
+                'Autism Spectrum Disorder',
+                'Multiple Disabilities',
               ]}
-              />
-                <Text style={styles.formSectionSubLabelHeadingText}>Scheme Summary</Text>
-                <TextInput
-                  style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
-                  value={schemeSummary}
-                  onChangeText={setschemeSummary}
-                  placeholder="Add New Scheme's Summary"
-                  placeholderTextColor="#a1a1aa"
-                  multiline
-                  numberOfLines={1}
-                />
-              <Text style={styles.formSectionSubLabelHeadingText}>Scheme Eligibility Criteria</Text>
-                <TextInput
-                  style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
-                  value={schemeEligibility}
-                  onChangeText={setschemeEligibility}
-                  placeholder="Add New Scheme's Eligibility Criteria"
-                  placeholderTextColor="#a1a1aa"
-                  multiline
-                  numberOfLines={1}
-                />
+            />
+
+            <Text style={styles.formSectionSubLabelHeadingText}>Scheme Summary</Text>
+            <TextInput
+              style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
+              value={schemeSummary}
+              onChangeText={setschemeSummary}
+              placeholder="Add New Scheme's Summary"
+              placeholderTextColor="#a1a1aa"
+              multiline
+              numberOfLines={1}
+            />
+
+            <Text style={styles.formSectionSubLabelHeadingText}>Scheme Eligibility Criteria</Text>
+            <TextInput
+              style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
+              value={schemeEligibility}
+              onChangeText={setschemeEligibility}
+              placeholder="Add New Scheme's Eligibility Criteria"
+              placeholderTextColor="#a1a1aa"
+              multiline
+              numberOfLines={1}
+            />
+
             <Text style={styles.formSectionSubLabelHeadingText}>How To Apply</Text>
-                <TextInput
-                  style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
-                  value={schemeHowTo}
-                  onChangeText={setschemeHowTo}
-                  placeholder="Add Details For A Beneficiary To Apply To The Scheme "
-                  placeholderTextColor="#a1a1aa"
-                  multiline
-                  numberOfLines={1}
-                />
+            <TextInput
+              style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
+              value={schemeHowTo}
+              onChangeText={setschemeHowTo}
+              placeholder="Add Details For A Beneficiary To Apply To The Scheme"
+              placeholderTextColor="#a1a1aa"
+              multiline
+              numberOfLines={1}
+            />
+
             <Text style={styles.formSectionSubLabelHeadingText}>Application URL</Text>
+            <TextInput
+              style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
+              value={applicationURL}
+              onChangeText={setapplicationURL}
+              placeholder="Add Application Link"
+              placeholderTextColor="#a1a1aa"
+              multiline
+              numberOfLines={1}
+            />
+
+            <TouchableOpacity 
+              style={[styles.mainFormSubmissionActionDispatcherBtn, (!schemeName.trim() || !disabilityType) && { backgroundColor: '#cbd5e1' }]} 
+              onPress={handleSendScheme} 
+              disabled={SubmittingScheme || !schemeName.trim() || !disabilityType}
+            >
+              {SubmittingScheme ? (
+                <ActivityIndicator color="#ffffff" size="small" />
+              ) : (
+                <Text style={styles.mainFormSubmissionActionDispatcherBtnText}>Push to Beneficiary Screens</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── TAB 4: SUGGESTIONS FORM ── */}
+        {!loading && activeTab === 'suggestions' && (
+          <View style={styles.suggestionFormWrapper}>
+            <Text style={styles.formHeaderLabelTitle}>Curate Scheme Assignment</Text>
+            
+            <View style={styles.searchRowContainer}>
+              <TextInput
+                style={styles.formInputFieldSearchBox}
+                value={searchPhone}
+                onChangeText={setSearchPhone}
+                placeholder="Beneficiary phone number (10 digits)"
+                placeholderTextColor="#9ca3af"
+                keyboardType="phone-pad"
+                maxLength={10}
+              />
+              <TouchableOpacity style={styles.formSubmitActionBtnSearch} onPress={handleLookupBeneficiary} disabled={searchingUser}>
+                {searchingUser ? <ActivityIndicator color="#ffffff" size="small" /> : <Ionicons name="search" size={18} color="#ffffff" />}
+              </TouchableOpacity>
+            </View>
+
+            {foundUser && (
+              <View style={styles.summaryProfileCardFoundDisplayRow}>
+                <View style={styles.summaryCardAvatarBoxCircle}>
+                  <Text style={styles.avatarLetterFoundMiniText}>{foundUser.name.charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.foundProfileNameHeading}>{foundUser.name}</Text>
+                  <Text style={styles.foundProfileMetaCategoryDetail}>Category: {foundUser.disabilityType}</Text>
+                </View>
+              </View>
+            )}
+
+            {foundUser && (
+              <View style={{ marginTop: 14 }}>
+                <Text style={styles.formSectionSubLabelHeadingText}>Select Matching Welfare Scheme:</Text>
+                <View style={styles.scrollRadioSelectorContainerBox}>
+                  <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled={true}>
+                    {masterSchemesRaw.filter(s => String(s.disabilityType).toLowerCase().trim() === String(foundUser.disabilityType).toLowerCase().trim()).length === 0 ? (
+                      <Text style={{ fontStyle: 'italic', padding: 10, color: '#6b7280' }}>No specific schemes available for this category.</Text>
+                    ) : (
+                      masterSchemesRaw
+                        .filter(s => s.disabilityType.toLowerCase().trim() === foundUser.disabilityType.toLowerCase().trim())
+                        .map((scheme) => {
+                          const isTargetActive = scheme.id === selectedSchemeId;
+                          return (
+                            <TouchableOpacity
+                              key={scheme.id}
+                              style={[styles.radioRowSelectTargetItemButton, isTargetActive && styles.radioRowSelectTargetItemButtonActive]}
+                              onPress={() => setSelectedSchemeId(scheme.id)}
+                            >
+                              <Ionicons name={isTargetActive ? "radio-button-on" : "radio-button-off"} size={18} color={isTargetActive ? "#2563eb" : "#4b5563"} />
+                              <Text style={[styles.radioSelectionLabelTitleText, isTargetActive && styles.radioSelectionLabelTitleTextActive]}>{scheme.schemeName}</Text>
+                            </TouchableOpacity>
+                          );
+                        })
+                    )}
+                  </ScrollView>
+                </View>
+
+                <Text style={styles.formSectionSubLabelHeadingText}>Volunteer Advisor Notes:</Text>
                 <TextInput
                   style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
-                  value={applicationURL}
-                  onChangeText={setapplicationURL}
-                  placeholder="Add Application Link"
+                  value={operatorNotes}
+                  onChangeText={setOperatorNotes}
+                  placeholder="Add custom eligibility tips or timeline application reminders..."
                   placeholderTextColor="#a1a1aa"
                   multiline
-                  numberOfLines={1}
+                  numberOfLines={3}
                 />
-              <Text style={styles.formSectionSubLabelHeadingText}>Added By</Text>
-                <TextInput
-                  style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
-                  value={ngoName}
-                  onChangeText={setngoName}
-                  placeholder="Add NGO Name"
-                  placeholderTextColor="#a1a1aa"
-                  multiline
-                  numberOfLines={1}
-                />
+
                 <TouchableOpacity 
                   style={[styles.mainFormSubmissionActionDispatcherBtn, !selectedSchemeId && { backgroundColor: '#cbd5e1' }]} 
-                  onPress={handleSendScheme} 
-                  disabled={SubmittingScheme}
+                  onPress={handleSendRecommendation} 
+                  disabled={submittingSuggestion || !selectedSchemeId}
                 >
-                  {SubmittingScheme ? (
+                  {submittingSuggestion ? (
                     <ActivityIndicator color="#ffffff" size="small" />
                   ) : (
-                    <Text style={styles.mainFormSubmissionActionDispatcherBtnText}>Push to Beneficiary Screens</Text>
+                    <Text style={styles.mainFormSubmissionActionDispatcherBtnText}>Push to Beneficiary Screen</Text>
                   )}
                 </TouchableOpacity>
               </View>
-                )}
-
-      {/* ── TAB LAYOUT SCREEN MODULE FOUR: SUGGESTIONS FORM VIEW ── */}
-      {!loading && activeTab === 'suggestions' && (
-        <View style={styles.suggestionFormWrapper}>
-          <Text style={styles.formHeaderLabelTitle}>Curate Scheme Assignment</Text>
-          
-          <View style={styles.searchRowContainer}>
-            <TextInput
-              style={styles.formInputFieldSearchBox}
-              value={searchPhone}
-              onChangeText={setSearchPhone}
-              placeholder="Beneficiary phone number (10 digits)"
-              placeholderTextColor="#9ca3af"
-              keyboardType="phone-pad"
-              maxLength={10}
-            />
-            <TouchableOpacity style={styles.formSubmitActionBtnSearch} onPress={handleLookupBeneficiary} disabled={searchingUser}>
-              {searchingUser ? <ActivityIndicator color="#ffffff" size="small" /> : <Ionicons name="search" size={18} color="#ffffff" />}
-            </TouchableOpacity>
+            )}
           </View>
+        )}
+      </ScrollView>
 
-          {foundUser && (
-            <View style={styles.summaryProfileCardFoundDisplayRow}>
-              <View style={styles.summaryCardAvatarBoxCircle}>
-                <Text style={styles.avatarLetterFoundMiniText}>{foundUser.name.charAt(0).toUpperCase()}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.foundProfileNameHeading}>{foundUser.name}</Text>
-                <Text style={styles.foundProfileMetaCategoryDetail}>Category: {foundUser.disabilityType}</Text>
-              </View>
-            </View>
-          )}
-
-          {foundUser && (
-            <View style={{ marginTop: 14 }}>
-              <Text style={styles.formSectionSubLabelHeadingText}>Select Matching Welfare Scheme:</Text>
-              <View style={styles.scrollRadioSelectorContainerBox}>
-                <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled={true}>
-                  {masterSchemesRaw.filter(s => String(s.disabilityType).toLowerCase().trim() === String(foundUser.disabilityType).toLowerCase().trim()).length === 0 ? (
-                    <Text style={{ fontStyle: 'italic', padding: 10, color: '#6b7280' }}>No specific schemes available for this category.</Text>
-                  ) : (
-                    masterSchemesRaw
-                      .filter(s => s.disabilityType.toLowerCase().trim() === foundUser.disabilityType.toLowerCase().trim())
-                      .map((scheme) => {
-                        const isTargetActive = scheme.id === selectedSchemeId;
-                        return (
-                          <TouchableOpacity
-                            key={scheme.id}
-                            style={[styles.radioRowSelectTargetItemButton, isTargetActive && styles.radioRowSelectTargetItemButtonActive]}
-                            onPress={() => setSelectedSchemeId(scheme.id)}
-                          >
-                            <Ionicons name={isTargetActive ? "radio-button-on" : "radio-button-off"} size={18} color={isTargetActive ? "#2563eb" : "#4b5563"} />
-                            <Text style={[styles.radioSelectionLabelTitleText, isTargetActive && styles.radioSelectionLabelTitleTextActive]}>{scheme.schemeName}</Text>
-                          </TouchableOpacity>
-                        );
-                      })
-                  )}
-                </ScrollView>
-              </View>
-
-              <Text style={styles.formSectionSubLabelHeadingText}>Volunteer Advisor Notes:</Text>
-              <TextInput
-                style={[styles.formInputFieldSearchBox, { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 }]}
-                value={operatorNotes}
-                onChangeText={setOperatorNotes}
-                placeholder="Add custom eligibility tips or timeline application reminders..."
-                placeholderTextColor="#a1a1aa"
-                multiline
-                numberOfLines={3}
-              />
-
-              <TouchableOpacity 
-                style={[styles.mainFormSubmissionActionDispatcherBtn, !selectedSchemeId && { backgroundColor: '#cbd5e1' }]} 
-                onPress={handleSendRecommendation} 
-                disabled={submittingSuggestion || !selectedSchemeId}
-              >
-                {submittingSuggestion ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.mainFormSubmissionActionDispatcherBtnText}>Push to Beneficiary Screen</Text>
-                )}
+      {/* ACTION REQUIRED REMARKS DIALOG MODAL */}
+      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Action Required Reason</Text>
+            <Text style={styles.modalSubtitle}>Explain to the beneficiary what needs to be corrected:</Text>
+            <TextInput
+              style={styles.modalTextInput}
+              value={customMessage}
+              onChangeText={setCustomMessage}
+              placeholder="e.g., Document details unclear, please upload a clearer copy."
+              placeholderTextColor="#9ca3af"
+              multiline
+              numberOfLines={4}
+            />
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity style={[styles.modalButton, styles.modalCancelButton]} onPress={() => setModalVisible(false)}>
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, styles.modalSubmitButton]} onPress={handleModalSubmit}>
+                <Text style={styles.modalSubmitButtonText}>Submit</Text>
               </TouchableOpacity>
             </View>
-          )}
-        </View>
-      )}
-    </ScrollView>
-
-
-
-    {/* ACTION REQUIRED REMARKS DIALOG MODAL */}
-    <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Action Required Reason</Text>
-          <Text style={styles.modalSubtitle}>Explain to the beneficiary what needs to be corrected:</Text>
-          <TextInput
-            style={styles.modalTextInput}
-            value={customMessage}
-            onChangeText={setCustomMessage}
-            placeholder="e.g., Document details unclear, please upload a clearer copy."
-            placeholderTextColor="#9ca3af"
-            multiline
-            numberOfLines={4}
-          />
-          <View style={styles.modalButtonRow}>
-            <TouchableOpacity style={[styles.modalButton, styles.modalCancelButton]} onPress={() => setModalVisible(false)}>
-              <Text style={styles.modalCancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.modalButton, styles.modalSubmitButton]} onPress={handleModalSubmit}>
-              <Text style={styles.modalSubmitButtonText}>Submit</Text>
-            </TouchableOpacity>
           </View>
         </View>
-      </View>
-    </Modal>
-  </View>
-);
+      </Modal>
+    </View>
+  );
 }
 
 // ── STYLE SHEET CONFIGURATIONS ──
 const styles = StyleSheet.create({
-
-
-  //dropdown style
   fieldGroup: { marginBottom: 18 },
   label: { fontSize: 16, fontWeight: '700', color: '#334155', marginBottom: 8 },
   inputLike: { 
@@ -1180,11 +1122,10 @@ const styles = StyleSheet.create({
   optionButton: { paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#f8fafc' },
   optionText: { fontSize: 17, color: '#334155', fontWeight: '500' },
 
-
   loginContainer: { flex: 1, backgroundColor: '#ffffff', paddingHorizontal: 24, justifyContent: 'center' },
   loginTitle: { fontSize: 32, fontWeight: '700', color: '#111827', marginBottom: 8 },
   loginSubtitle: { fontSize: 18, color: '#6b7280', marginBottom: 24, paddingVertical: 4 },
-  loginUnderSub: { fontSize: 10, color: '#6b7280', marginBottom: 24, paddingVertical: 4 },
+  loginUnderSub: { fontSize: 12, color: '#6b7280', marginTop: -8, marginBottom: 14 },
   loginInput: { borderWidth: 1.5, borderColor: '#9ca3af', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 14, fontSize: 18, color: '#111827', marginBottom: 14 },
   loginButton: { backgroundColor: '#2563eb', borderRadius: 10, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   loginButtonText: { color: '#ffffff', fontSize: 20, fontWeight: '700' },
@@ -1244,28 +1185,6 @@ const styles = StyleSheet.create({
   modalCancelButtonText: { color: '#374151', fontSize: 16, fontWeight: '600' },
   modalSubmitButton: { backgroundColor: '#2563eb' },
   modalSubmitButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
-  analyticsSummaryRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  analyticsSummaryCard: { flex: 1, backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', padding: 12, alignItems: 'center', elevation: 1 },
-  analyticsSummaryNumber: { fontSize: 28, fontWeight: '800', color: '#2563eb' },
-  analyticsSummaryLabel: { fontSize: 12, fontWeight: '600', color: '#64748b', textAlign: 'center', marginTop: 2 },
-  analyticsCard: { backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, marginBottom: 14, elevation: 2 },
-  analyticsCardHeader: { marginBottom: 12 },
-  analyticsCardTitle: { fontSize: 17, fontWeight: '700', color: '#1e293b', marginBottom: 6 },
-  analyticsSummarySnippetText: { fontSize: 14, color: '#475569', lineHeight: 20, marginBottom: 12, fontStyle: 'italic' },
-  disabilityTypeBadge: { alignSelf: 'flex-start', backgroundColor: '#eff6ff', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  disabilityTypeBadgeText: { fontSize: 12, fontWeight: '600', color: '#1d4ed8' },
-  statRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-  statLabel: { fontSize: 13, fontWeight: '600', color: '#475569', width: 105, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statBarTrack: { flex: 1, height: 8, backgroundColor: '#f1f5f9', borderRadius: 999, overflow: 'hidden' },
-  statBarFill: { height: 8, borderRadius: 999 },
-  statBarViewed: { backgroundColor: '#2563eb' },
-  statBarApplied: { backgroundColor: '#16a34a' },
-  statBarSaved: { backgroundColor: '#7c3aed' },
-  statBarClicked: { backgroundColor: '#ea580c' },
-  statBarShared: { backgroundColor: '#0891b2' },
-  statCount: { fontSize: 14, fontWeight: '700', color: '#1e293b', width: 28, textAlign: 'right' },
-  
-  // ── SUGGESTIONS SHEET INTERFACE DISPLAY COMPONENT ATOMS ──
   suggestionFormWrapper: { backgroundColor: '#ffffff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', marginTop: 4 },
   formHeaderLabelTitle: { fontSize: 20, fontWeight: '700', color: '#1f2937', marginBottom: 12 },
   searchRowContainer: { flexDirection: 'row', gap: 8, marginBottom: 4 },

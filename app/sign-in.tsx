@@ -20,44 +20,44 @@ export default function SignInScreen() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Main Authentication Workflow
   const handleSignIn = async () => {
-    // 1. Initial local presence validation gate
-    if (!phone.trim()) {
-      Alert.alert('Error', 'Please enter your mobile number to sign in.');
+    const rawPhone = phone.trim();
+    const cleanPhoneDigits = rawPhone.replace(/\D/g, '').slice(-10);
+
+    if (cleanPhoneDigits.length !== 10) {
+      Alert.alert('Invalid Phone', 'Please enter a valid 10-digit mobile number.');
       return;
     }
-  
+
     try {
       setLoading(true);
-      const cleanPhone = phone.trim();
-  
-      // 2. Load preferred language preferences or set fallback defaults
+
       const persistedGlobalLang = await AsyncStorage.getItem('appLanguagePreference');
       const fallbackLang = persistedGlobalLang || 'English';
-  
-      // 3. Fetch user sheets directory records from Google Apps Script endpoint
+
+      // 1. Fetch live user sheet records
       const response = await fetch(
         'https://script.google.com/macros/s/AKfycbwQrpJuBbxob2il_yZwOcfG34jyBArDl7I4RYsfH4RKW7q4n7xtBzhQxLpRXdGZPDGPIQ/exec?action=getUsers',
         { method: 'GET', redirect: 'follow' }
       );
-  
-      // 4. Ingest raw streams and normalize object wrappers cleanly into array shapes
+
       let usersList = [];
       if (response.ok) {
         const rawData = await response.json();
         usersList = Array.isArray(rawData) ? rawData : (rawData.data || rawData.users || rawData.Users || []);
       }
-  
-      // 5. Scan collection objects and match entries by string cell phone properties
+
+      // 2. Resilient Phone Number Matching (compares last 10 digits)
       let matchedUser = null;
       if (Array.isArray(usersList) && usersList.length > 0) {
-        matchedUser = usersList.find(
-          (u: any) => u && u.phone && String(u.phone).trim() === cleanPhone
-        );
+        matchedUser = usersList.find((u: any) => {
+          if (!u || !u.phone) return false;
+          const userPhoneDigits = String(u.phone).replace(/\D/g, '').slice(-10);
+          return userPhoneDigits === cleanPhoneDigits;
+        });
       }
 
-      // 6. Direct unregistered items to sign-up flows; otherwise append session attributes
+      // 3. User Not Found Check
       if (!matchedUser) {
         Alert.alert(
           'Not Registered',
@@ -69,54 +69,37 @@ export default function SignInScreen() {
         );
         setLoading(false);
         return;
-      } else {
-        matchedUser = {
-          ...matchedUser,
-          language: fallbackLang,
-          ngoId: matchedUser.ngoId || 'CENTRAL_POOL'
-        };
       }
-  
-      // 7. Resolve legacy vs unified lookup identifiers to pull previous bookmarks
-      const lookupUid = matchedUser.uid || matchedUser.userId || `user_${cleanPhone}`;
+
+      // 4. Preserve sheet attributes without destructive overrides
+      matchedUser = {
+        ...matchedUser,
+        phone: cleanPhoneDigits,
+        language: matchedUser.language || fallbackLang,
+        ngoId: matchedUser.ngoId || 'CENTRAL_POOL'
+      };
+
+      // 5. Restore user-specific bookmark states
+      const lookupUid = matchedUser.uid || matchedUser.userId || `user_${cleanPhoneDigits}`;
       const primaryBackup = await AsyncStorage.getItem(`saved_schemes_${lookupUid}`);
-      const fallbackBackup = await AsyncStorage.getItem(`saved_schemes_${cleanPhone}`);
+      const fallbackBackup = await AsyncStorage.getItem(`saved_schemes_${cleanPhoneDigits}`);
       const resolvedBackupData = primaryBackup || fallbackBackup;
 
-      // 8. Synchronize session bookmarks array into current runtime scopes
       if (resolvedBackupData) {
         await AsyncStorage.setItem('savedSchemes', resolvedBackupData);
       } else {
         await AsyncStorage.removeItem('savedSchemes');
       }
 
-      // 9. Persist verified profile context and route directly to main dashboard routes
+      // 6. Persist session
       await AsyncStorage.setItem('loggedInUser', JSON.stringify(matchedUser));
-      router.replace('/(tabs)');
-  
-    } catch (error) {
-      console.error('Sign-in error:', error);
-  
-      // 10. Resilient Offline/Network Failure Fail-Safe Fallback Block
-      const persistedGlobalLang = await AsyncStorage.getItem('appLanguagePreference');
-      const fallbackLang = persistedGlobalLang || 'English';
-  
-      const safetyUserFallback = {
-        uid: `safe_${phone.trim()}`,
-        name: "User Profile",
-        phone: phone.trim(),
-        disabilityType: "Locomotor Disability",
-        language: fallbackLang,
-        ngoId: 'CENTRAL_POOL'
-      };
-      
-      const localBackup = await AsyncStorage.getItem(`saved_schemes_${phone.trim()}`);
-      if (localBackup) {
-        await AsyncStorage.setItem('savedSchemes', localBackup);
-      }
+      await AsyncStorage.setItem('appLanguagePreference', matchedUser.language);
 
-      await AsyncStorage.setItem('loggedInUser', JSON.stringify(safetyUserFallback));
       router.replace('/(tabs)');
+
+    } catch (error) {
+      console.error('Sign-in network error:', error);
+      Alert.alert('Connection Error', 'Unable to reach the server. Please verify your internet connection and try again.');
     } finally {
       setLoading(false);
     }
